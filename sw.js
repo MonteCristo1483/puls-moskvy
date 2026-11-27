@@ -83,7 +83,10 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.endsWith(".pmtiles")) return;
   // Данные — тоже network-first: файл по тому же URL перезаписывается
   // при деплое, stale-first отдавал старые geojson до следующего захода.
-  const isData = url.pathname.startsWith(BASE + "/data/");
+  // live/ (S6) обновляется ежедневным коммитом по тому же URL — те же причины.
+  const isData =
+    url.pathname.startsWith(BASE + "/data/") ||
+    url.pathname.startsWith(BASE + "/live/");
   event.respondWith(
     event.request.mode === "navigate" || isData
       ? networkFirst(event.request, true)
