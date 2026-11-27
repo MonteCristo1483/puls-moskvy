@@ -4,9 +4,9 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Пульс Москвы — Пресненский",
+  title: "Пульс Москвы — что сейчас в городе",
   description:
-    "Пульс Москвы — что вокруг дома: погода и ветер, школы, транспорт, индекс окружения по открытым данным.",
+    "Пульс Москвы — что сейчас в городе: погода и ветер, школы, транспорт, парки и жизнь районов по открытым данным.",
   manifest: "/puls-moskvy/manifest.json",
   icons: { icon: "/puls-moskvy/icon.svg" },
   appleWebApp: {

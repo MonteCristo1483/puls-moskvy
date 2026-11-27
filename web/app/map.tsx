@@ -5399,7 +5399,7 @@ export default function Map() {
         </div>
       )}
       <div className="pointer-events-none absolute bottom-2 right-3 max-w-md text-right text-[11px] leading-tight text-slate-500 dark:text-slate-400">
-        © OpenStreetMap contributors, ODbL · Индекс окружения — справочная
+        © OpenStreetMap contributors, ODbL · Пульс Москвы — справочная
         информация по открытым данным, не является замером или оценкой стоимости
       </div>
     </div>
