@@ -12,13 +12,16 @@
 // на другое устройство и открывает карточку. Оформление — только токены и
 // примитивы из `design/` (Panel): никаких hex и произвольных кеглей.
 import { useEffect, useState, useSyncExternalStore } from "react";
+import type { Map as MapLibreMap } from "maplibre-gl";
 import type { LayerFacts } from "./layers/contract";
 import { initialFacts } from "./layers/facts-store";
 import {
+  clearWorkFocus,
   closeWork,
   initialWorks,
   openWork,
   readWorkParam,
+  workCentroid,
   workShareUrl,
   worksStore,
   WORK_SOURCE_DATASET,
@@ -30,7 +33,13 @@ import { Panel } from "./design";
 /** Единая формулировка для поля, которого нет в источнике. */
 export const WORK_MISSING = "в источнике не указано";
 
-type Fact = { label: string; value: string | null };
+/**
+ * Факт карточки. `source` — только для поля из ДРУГОГО набора: поля из
+ * основного источника не повторяют его ссылку и дату под каждым значением
+ * (они стоят один раз в шапке), а чужая метка появится сама.
+ */
+type FactSource = { dataset: number; url: string; label: string };
+type Fact = { label: string; value: string | null; source?: FactSource };
 
 /** Непустая строка источника; пустое/не строковое — null (а не «»). */
 function sourceText(value: unknown): string | null {
@@ -103,7 +112,13 @@ function CloseIcon() {
   );
 }
 
-export default function WorkCard({ facts }: { facts: LayerFacts }) {
+export default function WorkCard({
+  facts,
+  getMap,
+}: {
+  facts: LayerFacts;
+  getMap: () => MapLibreMap | null;
+}) {
   const state = useSyncExternalStore(
     worksStore.subscribe,
     worksStore.get,
@@ -116,14 +131,82 @@ export default function WorkCard({ facts }: { facts: LayerFacts }) {
   );
   const [copied, setCopied] = useState<"idle" | "ok" | "fail">("idle");
 
-  // Ссылка `?work=<id>` открывает карточку без клика по карте.
+  // Ссылка `?work=<id>` открывает карточку и переводит камеру к объекту.
   useEffect(() => {
     const id = readWorkParam();
-    if (id) openWork(id, { syncUrl: false });
+    if (id) openWork(id, { syncUrl: false, focus: true });
   }, []);
 
   useEffect(() => {
     setCopied("idle");
+  }, [state.selectedId]);
+
+  // Deep link `?work=`: камера к объекту (центр геометрии, z≈15.5). Ждём карту
+  // и данные; после применения снимаем запрос фокуса. Открытие по клику не
+  // двигает карту — там focusId не выставляется.
+  useEffect(() => {
+    if (state.focusId === null || state.selectedId !== state.focusId) return;
+    const feature = state.data?.byId[state.focusId];
+    if (!feature) return;
+    const center = workCentroid(feature);
+    if (!center) {
+      clearWorkFocus();
+      return;
+    }
+    let timer: number | null = null;
+    let attempts = 0;
+    const apply = () => {
+      const map = getMap();
+      if (!map) return false;
+      try {
+        map.jumpTo({ center, zoom: 15.5 });
+      } catch {
+        return false;
+      }
+      clearWorkFocus();
+      return true;
+    };
+    if (apply()) return;
+    timer = window.setInterval(() => {
+      attempts += 1;
+      if (apply() || attempts >= 100) {
+        if (timer !== null) window.clearInterval(timer);
+        timer = null;
+        if (attempts >= 100) clearWorkFocus();
+      }
+    }, 100);
+    return () => {
+      if (timer !== null) window.clearInterval(timer);
+    };
+  }, [state.focusId, state.selectedId, state.data, getMap]);
+
+  // Одна активная карточка: открытие работ закрывает карточку дома, а выбор
+  // дома закрывает карточку работ. Шторка дома живёт в движке карты, поэтому
+  // наблюдаем её состояние (`data-sheet`) и закрываем штатной кнопкой —
+  // без правок map.tsx и без второго источника правды о выборе.
+  useEffect(() => {
+    if (state.selectedId === null) return;
+    const sheet = () => document.getElementById("building-sheet");
+    const closeBuilding = () => {
+      const element = sheet();
+      if (!element || element.getAttribute("data-sheet") !== "open") return;
+      element
+        .querySelector<HTMLButtonElement>('button[aria-label="Закрыть"]')
+        ?.click();
+    };
+    closeBuilding();
+    const openedAt = Date.now();
+    const observer = new MutationObserver(() => {
+      // Первые 500 мс — это закрытие дома, которое мы сами только что заказали.
+      if (Date.now() - openedAt < 500) return;
+      if (sheet()?.getAttribute("data-sheet") === "open") closeWork();
+    });
+    observer.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-sheet"],
+    });
+    return () => observer.disconnect();
   }, [state.selectedId]);
 
   if (state.selectedId === null) return null;
@@ -132,8 +215,6 @@ export default function WorkCard({ facts }: { facts: LayerFacts }) {
   const feature = state.data?.byId[id] ?? null;
   const properties: WorkProperties = feature?.properties ?? {};
   const dateLabel = dataDateLabel(factsState);
-  // Провенанс каждого факта: источник + дата данных (МСК), одной строкой.
-  const provenance = `data.mos.ru, набор ${WORK_SOURCE_DATASET} · ${dateLabel}`;
   const factsRows = feature ? factsOf(properties) : [];
   const title =
     sourceText(properties.address) ??
@@ -173,14 +254,17 @@ export default function WorkCard({ facts }: { facts: LayerFacts }) {
               >
                 {fact.value ?? WORK_MISSING}
               </dd>
-              <a
-                href={WORK_SOURCE_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="text-9 leading-tight text-ink-3 underline decoration-border underline-offset-2"
-              >
-                {provenance}
-              </a>
+              {/* Метка возвращается только для поля из чужого набора. */}
+              {fact.source && fact.source.dataset !== WORK_SOURCE_DATASET && (
+                <a
+                  href={fact.source.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-9 leading-tight text-ink-3 underline decoration-border underline-offset-2"
+                >
+                  {fact.source.label} · {dateLabel}
+                </a>
+              )}
             </div>
           ))}
         </dl>

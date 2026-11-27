@@ -223,5 +223,5 @@ export const worksCardLayer: LayerPlugin = {
   id: "works-card",
   label: "Карточка объекта",
   defaultVisible: true,
-  View: ({ context }) => <WorkCard facts={context.facts} />,
+  View: ({ context }) => <WorkCard facts={context.facts} getMap={context.getMap} />,
 };

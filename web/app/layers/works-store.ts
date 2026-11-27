@@ -62,6 +62,11 @@ export type WorksState = {
   data: WorksData | null;
   /** Открытая карточка: `global_id` строкой (URL и properties — строки). */
   selectedId: string | null;
+  /**
+   * Объект, к которому нужно перевести камеру (deep link `?work=`).
+   * null — камера не двигается (открытие по клику: объект уже в кадре).
+   */
+  focusId: string | null;
 };
 
 /** Состояние до первого запроса — стабильная ссылка для SSR-снимка. */
@@ -69,6 +74,7 @@ export const initialWorks: WorksState = {
   status: "idle",
   data: null,
   selectedId: null,
+  focusId: null,
 };
 
 let current: WorksState = initialWorks;
@@ -172,18 +178,66 @@ export function loadWorks(): Promise<WorksData | null> {
 }
 
 /** Открыть карточку объекта; `syncUrl: false` — пришло из URL, не переписывать. */
-export function openWork(rawId: string | number, options: { syncUrl?: boolean } = {}): void {
+export function openWork(
+  rawId: string | number,
+  options: { syncUrl?: boolean; focus?: boolean } = {},
+): void {
   const id = String(rawId).trim();
   if (!id) return;
-  publish({ selectedId: id });
+  // focus — только deep link: при клике объект уже в кадре, камеру не трогаем.
+  publish({ selectedId: id, focusId: options.focus ? id : null });
   void loadWorks();
   if (options.syncUrl !== false) writeWorkParam(id);
 }
 
 /** Закрыть карточку и убрать `?work` (остальные параметры сохраняются). */
 export function closeWork(): void {
-  if (current.selectedId !== null) publish({ selectedId: null });
+  if (current.selectedId !== null || current.focusId !== null) {
+    publish({ selectedId: null, focusId: null });
+  }
   writeWorkParam(null);
+}
+
+/** Камера отработала (или объект без геометрии) — снять запрос фокуса. */
+export function clearWorkFocus(): void {
+  if (current.focusId !== null) publish({ focusId: null });
+}
+
+/**
+ * Центр геометрии объекта: среднее всех координат. Для точки это сама точка,
+ * для линии/полигона — взвешенный по вершинам центр (камера deep link).
+ */
+export function workCentroid(feature: WorkFeature): [number, number] | null {
+  const positions: [number, number][] = [];
+  const collect = (value: unknown): void => {
+    if (!Array.isArray(value)) return;
+    if (
+      value.length >= 2 &&
+      typeof value[0] === "number" &&
+      typeof value[1] === "number"
+    ) {
+      positions.push([value[0], value[1]]);
+      return;
+    }
+    for (const item of value) collect(item);
+  };
+  const collectGeometry = (geometry: Geometry | null): void => {
+    if (!geometry) return;
+    if (geometry.type === "GeometryCollection") {
+      for (const part of geometry.geometries) collectGeometry(part);
+      return;
+    }
+    collect(geometry.coordinates);
+  };
+  collectGeometry(feature.geometry);
+  if (!positions.length) return null;
+  let lng = 0;
+  let lat = 0;
+  for (const [x, y] of positions) {
+    lng += x;
+    lat += y;
+  }
+  return [lng / positions.length, lat / positions.length];
 }
 
 /** `?work=<id>` из строки запроса; null — параметра нет. */
