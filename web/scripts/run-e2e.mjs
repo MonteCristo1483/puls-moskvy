@@ -3,7 +3,7 @@
 // Playwright → гашение сервера. Код возврата Playwright пробрасывается.
 //
 // Раскладка как на GitHub Pages: содержимое dist лежит в подпапке
-// /karta-okruzheniya. Поэтому копируем dist в .pages-test/karta-okruzheniya
+// /puls-moskvy. Поэтому копируем dist в .pages-test/puls-moskvy
 // (36 МБ, быстрее и безопаснее, чем симлинк на Windows).
 import { spawn } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
@@ -14,9 +14,9 @@ import { fileURLToPath } from "node:url";
 const WEB_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const DIST = join(WEB_ROOT, "dist");
 const PAGES_ROOT = join(WEB_ROOT, ".pages-test");
-const SITE = join(PAGES_ROOT, "karta-okruzheniya");
+const SITE = join(PAGES_ROOT, "puls-moskvy");
 const PORT = Number(process.env.E2E_PORT ?? 4173);
-const BASE_URL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${PORT}/karta-okruzheniya/`;
+const BASE_URL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${PORT}/puls-moskvy/`;
 const SERVER_TIMEOUT_MS = 30_000;
 
 function run(command, args, options = {}) {

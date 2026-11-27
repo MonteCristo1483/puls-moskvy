@@ -35,7 +35,7 @@ from db import DB_DSN
 SCHOOL_TYPE = "общеобразовательная организация"
 GEOCODE_URL = "https://nominatim.openstreetmap.org/search"
 GEOCODE_PAUSE_S = 1.1
-USER_AGENT = "karta-okruzheniya/1.0 (schools import; local dev)"
+USER_AGENT = "puls-moskvy/1.0 (schools import; local dev)"
 
 ALTER_TABLE = """
 ALTER TABLE poi ADD COLUMN IF NOT EXISTS name TEXT;

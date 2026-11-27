@@ -4,9 +4,11 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Карта окружения — Пресненский",
-  manifest: "/karta-okruzheniya/manifest.json",
-  icons: { icon: "/karta-okruzheniya/icon.svg" },
+  title: "Пульс Москвы — Пресненский",
+  description:
+    "Пульс Москвы — что вокруг дома: погода и ветер, школы, транспорт, индекс окружения по открытым данным.",
+  manifest: "/puls-moskvy/manifest.json",
+  icons: { icon: "/puls-moskvy/icon.svg" },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -20,7 +22,7 @@ export const viewport: Viewport = {
 const themeInit = `try{var t=localStorage.getItem("karta-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}`;
 
 // В dev (localhost) SW не регистрируем — кэширование чанков ломает HMR.
-const swRegister = `if ("serviceWorker" in navigator && !["localhost","127.0.0.1"].includes(location.hostname)) { navigator.serviceWorker.register("/karta-okruzheniya/sw.js"); }`;
+const swRegister = `if ("serviceWorker" in navigator && !["localhost","127.0.0.1"].includes(location.hostname)) { navigator.serviceWorker.register("/puls-moskvy/sw.js"); }`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

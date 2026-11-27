@@ -20,7 +20,7 @@ import type { Theme } from "./theme";
 import WeatherLayer from "./weather-layer";
 
 // Пути относительные — статический экспорт живёт в подпапке
-// basePath (/karta-okruzheniya на GitHub Pages).
+// basePath (/puls-moskvy на GitHub Pages).
 const BUILDINGS_URL = "data/buildings.pmtiles";
 const BASEMAP_URL = "data/basemap.pmtiles";
 // Красные зоны, POI и деревья — единые тайлы на всю Москву (z8–16).
@@ -5394,7 +5394,7 @@ export default function Map() {
             <circle cx="256" cy="256" r="130" fill="none" stroke="#ffffff" strokeWidth="64" />
           </svg>
           <div className="text-lg font-semibold tracking-wide text-white">
-            Карта окружения
+            Пульс Москвы
           </div>
         </div>
       )}

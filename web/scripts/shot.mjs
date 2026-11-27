@@ -6,7 +6,7 @@
 //   node scripts/shot.mjs shots/before-1290-dpr1.png 1 1290 900 --perf
 //   node scripts/shot.mjs shots/before-1290-dpr2.png 2 1290 900
 //
-// Готовит Pages-раскладку (dist → .shot/karta-okruzheniya), поднимает
+// Готовит Pages-раскладку (dist → .shot/puls-moskvy), поднимает
 // статик-сервер, снимает скриншот. С --perf сначала меряет простой,
 // затем 200 кадров при непрерывном зуме колесом (1.5× и обратно),
 // печатает медиану, p95 и число кадров >33 мс.
@@ -19,9 +19,9 @@ import { chromium } from "@playwright/test";
 const WEB_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const DIST = join(WEB_ROOT, "dist");
 const ROOT = join(WEB_ROOT, ".shot");
-const SITE = join(ROOT, "karta-okruzheniya");
+const SITE = join(ROOT, "puls-moskvy");
 const PORT = Number(process.env.SHOT_PORT ?? 4199);
-const BASE_URL = `http://127.0.0.1:${PORT}/karta-okruzheniya/`;
+const BASE_URL = `http://127.0.0.1:${PORT}/puls-moskvy/`;
 
 const [outArg, dprArg, widthArg, heightArg, ...flags] = process.argv.slice(2);
 if (!outArg || !dprArg || !widthArg || !heightArg) {

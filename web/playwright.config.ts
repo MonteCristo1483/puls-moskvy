@@ -2,10 +2,10 @@ import { defineConfig, devices } from "@playwright/test";
 
 // baseURL приходит из `scripts/run-e2e.mjs` (локальный сервер) или из env
 // в CI. Сайт живёт в подпапке GitHub Pages, поэтому по умолчанию —
-// /karta-okruzheniya/.
+// /puls-moskvy/.
 const port = process.env.E2E_PORT ?? "4173";
 const baseURL =
-  process.env.E2E_BASE_URL ?? `http://127.0.0.1:${port}/karta-okruzheniya/`;
+  process.env.E2E_BASE_URL ?? `http://127.0.0.1:${port}/puls-moskvy/`;
 
 export default defineConfig({
   testDir: "./e2e",
