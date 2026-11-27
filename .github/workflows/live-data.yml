@@ -1,0 +1,112 @@
+name: Live data
+
+# S6: ежедневный пайплайн фактов data.mos.ru → web/public/live/ (works.geojson
+# + meta.json). Ключ портала живёт только в секретах Actions: в браузер и в
+# репозиторий он не попадает (ADR-001).
+#
+# Почему отдельный workflow, а не шаг в Deploy: данные обновляются каждый день,
+# а сайт пересобирается только когда меняются файлы live/. Иначе — 10 деплоев
+# в час, сборка Next, tippecanoe и Playwright на каждый прогон (ARCHITECTURE §4).
+#
+# diff=0: скрипт пишет файлы, только если содержимое изменилось байт в байт,
+# поэтому на неизменном источнике коммита не будет вовсе.
+on:
+  schedule:
+    # 03:00 UTC = 06:00 МСК. cron GitHub — best-effort, может опаздывать.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  # gh workflow run (вызов Deploy) требует actions: write — без него 403.
+  actions: write
+
+concurrency:
+  group: live-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Fetch facts and commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # schedule идёт только с дефолтной ветки; ручной запуск — тоже с main,
+    # иначе пуш в main отправил бы туда содержимое рабочей ветки.
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      # Секрет добавляет владелец: Settings → Secrets and variables → Actions.
+      # Без него молча ничего не обновлялось бы — падаем с понятным текстом.
+      - name: Check MOSRU_API_KEY
+        env:
+          MOSRU_API_KEY: ${{ secrets.MOSRU_API_KEY }}
+        run: |
+          if [ -z "${MOSRU_API_KEY:-}" ]; then
+            echo "::error::Нет секрета MOSRU_API_KEY. Settings → Secrets and variables → Actions → New repository secret: имя MOSRU_API_KEY, значение — ключ из профиля apidata.mos.ru. Без ключа data.mos.ru отвечает 401 и live/ не обновится."
+            exit 1
+          fi
+
+      - name: Fetch facts
+        env:
+          MOSRU_API_KEY: ${{ secrets.MOSRU_API_KEY }}
+        run: python pipeline/fetch_facts.py --permits
+
+      # Дешёвая страховка от «источник отдал мусор»: файлы обязаны быть
+      # согласованы между собой, иначе коммит не делаем.
+      - name: Check export
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          live = Path("web/public/live")
+          meta = json.loads((live / "meta.json").read_text(encoding="utf-8"))
+          collection = json.loads((live / "works.geojson").read_text(encoding="utf-8"))
+          features = collection.get("features") or []
+          rows = meta["sources"]["works"]["rows"]
+          if collection.get("type") != "FeatureCollection" or not features:
+              raise SystemExit("works.geojson: не FeatureCollection или пустой")
+          if rows != len(features):
+              raise SystemExit(f"meta.json: {rows} объектов против {len(features)} в geojson")
+          if rows < 100:
+              raise SystemExit(f"подозрительно мало объектов: {rows}")
+          print(f"live/: {rows} объектов, данные на {meta['generated_at']}")
+          PY
+
+      - name: Commit and push if changed
+        id: commit
+        run: |
+          set -euo pipefail
+          # Смотрим именно изменения в live/: файлы появляются и правятся только здесь.
+          if [ -z "$(git status --porcelain -- web/public/live)" ]; then
+            echo "::notice::данные не изменились — коммит не нужен"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- web/public/live
+          rows=$(python -c "import json;print(json.load(open('web/public/live/meta.json'))['sources']['works']['rows'])")
+          generated=$(python -c "import json;print(json.load(open('web/public/live/meta.json'))['generated_at'])")
+          git commit --no-status -m "data(live): факты data.mos.ru на ${generated} (${rows} объектов)"
+          # Пока шёл прогон, в main мог приехать чужой коммит — тогда пуш
+          # отвергнут как non-fast-forward. Перебазируемся и повторяем: в этом
+          # коммите только web/public/live/, конфликтов это не создаёт.
+          git push origin HEAD:main || {
+            git pull --rebase origin main
+            git push origin HEAD:main
+          }
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # Пуш от GITHUB_TOKEN не запускает Deploy по push (GitHub не создаёт
+      # события от своего токена, см. тот же обход в autopilot.yml) — вызываем явно.
+      - name: Trigger Deploy
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy.yml --ref main
