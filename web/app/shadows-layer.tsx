@@ -29,6 +29,7 @@ import {
 import {
   buildingShadowMulti,
   cleanRing,
+  dissolveShadows,
   dustSpots,
   MIN_SHADOW_ALTITUDE_DEG,
   type LonLat,
@@ -44,14 +45,18 @@ const DUST_LAYER_ID = "shadows-dust-arrows";
 const SHADOW_MIN_ZOOM = 13;
 const COMPUTE_MIN_ZOOM = 12.8;
 // Потолок домов на кадр: больше — уже не видно, а платить временем придётся.
-const MAX_BUILDINGS = 4000;
+// Дома сортируются по площади контура, поэтому срез — это самые мелкие
+// постройки (сараи, гаражи), чья пятидесятиметровая тень не читается.
+const MAX_BUILDINGS = 1000;
 const MOVE_DEBOUNCE_MS = 140;
 
 const SHADOW_PAINT: Record<Theme, { color: string; opacity: number }> = {
-  // Слои перекрываются (дома рядом), поэтому базовые 0.3 в светлой теме уже
-  // дают заметные полосы; в тёмной подложке тень должна быть плотнее.
-  light: { color: "#0f172a", opacity: 0.34 },
-  dark: { color: "#000000", opacity: 0.5 },
+  // Тени кадра растворены в один MultiPolygon, поэтому альфа больше не
+  // складывается на перекрытиях: 0.19 в светлой теме — ровная «тень на земле»,
+  // подложка (улицы, парк, номера домов) остаётся читаемой. В тёмной подложке
+  // нужен чуть больший контраст, но не «выжигание».
+  light: { color: "#0f172a", opacity: 0.19 },
+  dark: { color: "#000000", opacity: 0.32 },
 };
 
 const DUST_PIXEL_RATIO = 2;
@@ -68,6 +73,8 @@ type ShadowStats = {
   azimuth: number | null;
   buildings: number;
   ms: number | null;
+  /** Время растворения теней кадра (union), мс. */
+  unionMs: number | null;
   dust: number;
   windSpeed: number | null;
 };
@@ -240,6 +247,7 @@ export default function ShadowsLayer({
     azimuth: null,
     buildings: 0,
     ms: null,
+    unionMs: null,
     dust: 0,
     windSpeed: null,
   });
@@ -300,6 +308,19 @@ export default function ShadowsLayer({
       const minutes = Math.floor(moscowClockMinutes(now));
       return { date: new Date(now), minutes };
     }
+
+    // Кэш растворённых теней: ключ = время + bbox кадра + число теней.
+    // Живёт в замыкании эффекта (сбрасывается при смене темы — редкость).
+    const shadowCache: Record<string, ShadowMultiPolygon> = {};
+    const shadowCacheOrder: string[] = [];
+    const rememberShadow = (key: string, value: ShadowMultiPolygon) => {
+      shadowCache[key] = value;
+      shadowCacheOrder.push(key);
+      while (shadowCacheOrder.length > 4) {
+        const old = shadowCacheOrder.shift();
+        if (old !== undefined) delete shadowCache[old];
+      }
+    };
 
     function scheduleRetry() {
       if (retryTimer !== null || attempts >= 120) return;
@@ -519,6 +540,7 @@ export default function ShadowsLayer({
             azimuth: sun.azimuthDeg,
             buildings: 0,
             ms: null,
+            unionMs: null,
             dust: 0,
             windSpeed: null,
           });
@@ -530,8 +552,13 @@ export default function ShadowsLayer({
         ensureLayer();
 
         // ── Тени ────────────────────────────────────────────────────────
-        let features: Array<Feature<MultiPolygon, { height: number }>> = [];
+        // Собираем тени всех домов кадра и растворяем их в ОДИН MultiPolygon:
+        // иначе перекрытия соседних домов складывают альфу и подложка
+        // превращается в тёмные пятна. Растворение кэшируем по (время + bbox
+        // кадра + число теней) — догрузка тайлов и тик часов не считают union
+        // заново на том же кадре.
         let count = 0;
+        const polygons: ShadowMultiPolygon[] = [];
         if (sun.altitudeDeg > 0) {
           for (const group of collectFootprints(map.getBounds())) {
             const shadow = buildingShadowMulti(
@@ -541,17 +568,46 @@ export default function ShadowsLayer({
               center.lat,
             );
             if (!shadow) continue;
-            features.push({
-              type: "Feature",
-              properties: { height: group.height },
-              geometry: { type: "MultiPolygon", coordinates: shadow },
-            });
+            for (const polygon of shadow) polygons.push([polygon]);
             count += 1;
           }
         }
-        const collection: FeatureCollection<MultiPolygon, { height: number }> = {
+        const bounds = map.getBounds();
+        const cacheKey = [
+          minutes,
+          bounds.getWest().toFixed(3),
+          bounds.getSouth().toFixed(3),
+          bounds.getEast().toFixed(3),
+          bounds.getNorth().toFixed(3),
+          polygons.length,
+        ].join("|");
+        const unionStartedAt = performance.now();
+        let dissolved = shadowCache[cacheKey];
+        const cachedUnion = dissolved !== undefined;
+        if (!dissolved) {
+          dissolved = dissolveShadows(polygons);
+          rememberShadow(cacheKey, dissolved);
+        }
+        const unionMs = cachedUnion ? 0 : performance.now() - unionStartedAt;
+
+        const collection: FeatureCollection<
+          MultiPolygon,
+          Record<string, never>
+        > = {
           type: "FeatureCollection",
-          features,
+          features:
+            dissolved.length > 0
+              ? [
+                  {
+                    type: "Feature",
+                    properties: {},
+                    geometry: {
+                      type: "MultiPolygon",
+                      coordinates: dissolved,
+                    },
+                  },
+                ]
+              : [],
         };
         (map.getSource(SHADOW_SOURCE_ID) as maplibregl.GeoJSONSource | undefined)?.setData(
           collection as never,
@@ -574,6 +630,7 @@ export default function ShadowsLayer({
           azimuth: sun.azimuthDeg,
           buildings: count,
           ms: elapsed,
+          unionMs,
           dust: polygonSpots.length,
           windSpeed: cached?.windSpeedMs ?? null,
         });
@@ -702,6 +759,9 @@ export default function ShadowsLayer({
       data-shadows-time={timeLabel}
       data-shadows-count={stats.buildings}
       data-shadows-ms={stats.ms === null ? undefined : stats.ms.toFixed(1)}
+      data-shadows-union-ms={
+        stats.unionMs === null ? undefined : stats.unionMs.toFixed(1)
+      }
       data-shadows-sun-altitude={
         stats.altitude === null ? undefined : stats.altitude.toFixed(2)
       }

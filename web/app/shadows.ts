@@ -157,64 +157,56 @@ export function distanceMeters(a: LonLat, b: LonLat): number {
 }
 
 /**
- * «Мост» между контуром и его сдвинутой копией: четырёхугольник по крайним
- * точкам вдоль оси, перпендикулярной тени. Без него union двух копий даёт
- * две отдельные фигуры с разрывом длиной в саму тень (длинная тень «отрывается»
- * от дома), а с мостом получается заметённая полоса — для выпуклого контура
- * это ровно выпуклая оболочка, для сложного — её разумное приближение.
+ * Выпуклая оболочка (монотонная цепь). Тень дома = оболочка контура и его
+ * сдвинутой копии: для выпуклого контура это ровно union двух копий, для
+ * сложного (Г-образного) — оболочка, которая заливает вдавленный угол.
+ * Оболочка в 20 раз дешевле union на дом и делает дешёвым растворение кадра.
  */
-function bridgeQuad(
-  base: ShadowMultiPolygon,
-  shifted: ShadowMultiPolygon,
-  offset: ShadowOffset,
-  latitude: number,
-): Ring | null {
-  const length = Math.hypot(offset.eastM, offset.northM);
-  if (!(length > 0)) return null;
-  const per = metersPerDegree(latitude);
-  // Ось, перпендикулярная сдвигу: p = (north, -east) / length.
-  const px = offset.northM / length;
-  const py = -offset.eastM / length;
+function convexHull(points: LonLat[]): Ring | null {
+  if (points.length < 3) return null;
+  const sorted = [...points].sort((a, b) =>
+    a[0] === b[0] ? a[1] - b[1] : a[0] - b[0],
+  );
+  const cross = (o: LonLat, a: LonLat, b: LonLat): number =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
 
-  const extreme = (points: LonLat[], sign: 1 | -1): LonLat | null => {
-    let best: LonLat | null = null;
-    let bestDot = -Infinity;
-    for (const point of points) {
-      const dot = (point[0] * per.lon * px + point[1] * per.lat * py) * sign;
-      if (dot > bestDot) {
-        bestDot = dot;
-        best = point;
-      }
+  const lower: LonLat[] = [];
+  for (const point of sorted) {
+    while (
+      lower.length >= 2 &&
+      cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0
+    ) {
+      lower.pop();
     }
-    return best;
-  };
-
-  const basePoints: LonLat[] = [];
-  for (const polygon of base) basePoints.push(...polygon[0]);
-  const shiftedPoints: LonLat[] = [];
-  for (const polygon of shifted) shiftedPoints.push(...polygon[0]);
-
-  const baseMax = extreme(basePoints, 1);
-  const baseMin = extreme(basePoints, -1);
-  const shiftedMax = extreme(shiftedPoints, 1);
-  const shiftedMin = extreme(shiftedPoints, -1);
-  if (!baseMax || !baseMin || !shiftedMax || !shiftedMin) return null;
-
-  return [
-    [baseMax[0], baseMax[1]],
-    [shiftedMax[0], shiftedMax[1]],
-    [shiftedMin[0], shiftedMin[1]],
-    [baseMin[0], baseMin[1]],
-    [baseMax[0], baseMax[1]],
-  ];
+    lower.push(point);
+  }
+  const upper: LonLat[] = [];
+  for (let i = sorted.length - 1; i >= 0; i -= 1) {
+    const point = sorted[i];
+    while (
+      upper.length >= 2 &&
+      cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0
+    ) {
+      upper.pop();
+    }
+    upper.push(point);
+  }
+  upper.pop();
+  lower.pop();
+  const ring = lower.concat(upper);
+  if (ring.length < 3) return null;
+  // Замыкаем кольцо: без последней точки shoelace и заливка «плывут».
+  const first = ring[0];
+  ring.push([first[0], first[1]]);
+  return ring;
 }
 
 /**
- * Тень дома: union исходного контура, контура, сдвинутого на всю длину тени
- * (проекция верхней кромки на землю), и «моста» между ними. null — тени нет.
+ * Тень дома: выпуклая оболочка контура и его копии, сдвинутой на всю длину
+ * тени (проекция верхней кромки на землю). null — тени нет.
  * Дыры (внутренние кольца) не переносим: тень двора перекрывается телом тени.
- * Несколько полигонов — части одного дома, разрезанного границей тайла:
- * объединяем их сразу, иначе на стыке тайлов тень темнеет дважды.
+ * Части одного дома (разрез тайлом) считаем отдельно, чтобы оболочка не
+ * перекинулась мостом через двор; перекрытие частей снимает растворение кадра.
  */
 export function buildingShadowMulti(
   polygons: ShadowMultiPolygon,
@@ -222,38 +214,25 @@ export function buildingShadowMulti(
   sun: SunDirection,
   latitude: number,
 ): ShadowMultiPolygon | null {
-  const base: ShadowMultiPolygon = [];
-  for (const polygon of polygons) {
-    const outer = cleanRing(polygon[0]);
-    if (outer) base.push([outer]);
-  }
-  if (base.length === 0) return null;
-
   const offset = shadowOffset(heightM, sun);
   if (!offset) return null;
 
-  const shifted: ShadowMultiPolygon = base.map((polygon) =>
-    polygon.map((ring) =>
-      translateRing(ring, offset.eastM, offset.northM, latitude),
-    ),
-  );
-  const bridge = bridgeQuad(base, shifted, offset, latitude);
-
-  try {
-    const bridgeGeom = bridge ? [[bridge]] : [];
-    const merged = polygonClipping.union(
-      base as never,
-      shifted as never,
-      ...(bridgeGeom as never[]),
-    ) as unknown as ShadowMultiPolygon;
-    const result = merged.filter(
-      (polygon) => Array.isArray(polygon) && polygon.length > 0,
-    );
-    return result.length > 0 ? result : null;
-  } catch {
-    // Булева операция не должна ронять слой: рисуем оба контура как есть.
-    return [...base, ...shifted];
+  const result: ShadowMultiPolygon = [];
+  for (const polygon of polygons) {
+    const points: LonLat[] = [];
+    for (const ring of polygon) {
+      const outer = cleanRing(ring);
+      if (!outer) continue;
+      points.push(...outer);
+      points.push(
+        ...translateRing(outer, offset.eastM, offset.northM, latitude),
+      );
+    }
+    if (points.length < 3) continue;
+    const hull = convexHull(points);
+    if (hull) result.push([hull]);
   }
+  return result.length > 0 ? result : null;
 }
 
 /** Тень одного кольца (одноэтажный дом или тест). */
@@ -266,6 +245,90 @@ export function buildingShadow(
   const base = cleanRing(ring);
   if (!base) return null;
   return buildingShadowMulti([[base]], heightM, sun, latitude);
+}
+
+// Кольцо, у которого после union остались десятки коллинеарных точек на
+// прямых участках, раздувает стоимость следующего union в разы. Точки,
+// лежащие на прямой с точностью ~10 см, выкидываем: форма не меняется,
+// а вершин становится в 20 раз меньше.
+const COLLINEAR_EPS = 1e-10; // deg² ≈ 0.1 м прогиба на 10 м отрезка
+const POINT_EPS = 1e-9; // ~0.1 мм: склейка совпадающих точек
+
+function simplifyRing(ring: Ring): Ring | null {
+  if (!ring || ring.length < 4) return null;
+  const open: Ring = [];
+  for (const point of ring) {
+    const last = open[open.length - 1];
+    if (
+      last &&
+      Math.abs(last[0] - point[0]) < POINT_EPS &&
+      Math.abs(last[1] - point[1]) < POINT_EPS
+    ) {
+      continue;
+    }
+    open.push(point);
+  }
+  if (open.length > 1) {
+    const first = open[0];
+    const last = open[open.length - 1];
+    if (
+      Math.abs(first[0] - last[0]) < POINT_EPS &&
+      Math.abs(first[1] - last[1]) < POINT_EPS
+    ) {
+      open.pop();
+    }
+  }
+  if (open.length < 3) return null;
+
+  const kept: Ring = [];
+  const count = open.length;
+  for (let i = 0; i < count; i += 1) {
+    const prev = open[(i - 1 + count) % count];
+    const current = open[i];
+    const next = open[(i + 1) % count];
+    const cross =
+      (current[0] - prev[0]) * (next[1] - prev[1]) -
+      (current[1] - prev[1]) * (next[0] - prev[0]);
+    if (Math.abs(cross) > COLLINEAR_EPS) kept.push(current);
+  }
+  if (kept.length < 3) return null;
+  return [...kept, kept[0]];
+}
+
+/**
+ * Растворение теней кадра в один MultiPolygon: перекрытия соседних домов
+ * перестают складывать альфу (иначе тёмные пятна выжигают подложку).
+ * Полигоны предварительно упрощаются — union по «чистым» контурам на порядок
+ * дешевле.
+ */
+export function dissolveShadows(
+  polygons: ShadowMultiPolygon[],
+): ShadowMultiPolygon {
+  if (polygons.length === 0) return [];
+  const simplified: ShadowMultiPolygon = [];
+  for (const multi of polygons) {
+    for (const polygon of multi) {
+      const rings: Ring[] = [];
+      for (const ring of polygon) {
+        const simple = simplifyRing(ring);
+        if (simple) rings.push(simple);
+      }
+      if (rings.length > 0) simplified.push(rings);
+    }
+  }
+  if (simplified.length === 0) return [];
+  if (simplified.length === 1) return simplified;
+  try {
+    const merged = polygonClipping.union(
+      simplified[0] as never,
+      ...(simplified.slice(1) as never[]),
+    ) as unknown as ShadowMultiPolygon;
+    return merged.filter((polygon) => Array.isArray(polygon) && polygon.length > 0);
+  } catch {
+    // Булева операция упала — отдаём полигоны как есть (тень останется,
+    // но перекрытия снова начнут складывать альфу). Лучше, чем пустой слой.
+    return simplified;
+  }
 }
 
 export type DustSpot = {
