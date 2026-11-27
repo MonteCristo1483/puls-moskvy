@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 455222,
+    "name": "район Марьино"
+  },
+  "buildings": 1424,
+  "homes": 567,
+  "poi": 246,
+  "redzones": 283,
+  "geojson_bytes": {
+    "buildings": 1866332,
+    "poi": 38072,
+    "redzones": 87115,
+    "district": 4864
+  },
+  "index_rows": 567,
+  "index_bytes": 60004,
+  "tiles": null,
+  "seconds": 3.8
+}

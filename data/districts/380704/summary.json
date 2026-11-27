@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 380704,
+    "name": "район Коммунарка"
+  },
+  "buildings": 17518,
+  "homes": 9480,
+  "poi": 294,
+  "redzones": 892,
+  "geojson_bytes": {
+    "buildings": 25517229,
+    "poi": 45617,
+    "redzones": 292338,
+    "district": 21034
+  },
+  "index_rows": 9480,
+  "index_bytes": 920327,
+  "tiles": null,
+  "seconds": 6.2
+}

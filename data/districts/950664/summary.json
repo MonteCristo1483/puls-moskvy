@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 950664,
+    "name": "район Чертаново Южное"
+  },
+  "buildings": 1041,
+  "homes": 513,
+  "poi": 144,
+  "redzones": 260,
+  "geojson_bytes": {
+    "buildings": 1491764,
+    "poi": 22322,
+    "redzones": 65762,
+    "district": 4764
+  },
+  "index_rows": 513,
+  "index_bytes": 55576,
+  "tiles": null,
+  "seconds": 3.8
+}

@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 445279,
+    "name": "район Северное Тушино"
+  },
+  "buildings": 1011,
+  "homes": 419,
+  "poi": 134,
+  "redzones": 247,
+  "geojson_bytes": {
+    "buildings": 1338756,
+    "poi": 20586,
+    "redzones": 59564,
+    "district": 4204
+  },
+  "index_rows": 419,
+  "index_bytes": 44917,
+  "tiles": null,
+  "seconds": 3.7
+}

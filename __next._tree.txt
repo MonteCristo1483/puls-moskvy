@@ -1,0 +1,4 @@
+:HL["/puls-moskvy/_next/static/chunks/29m6a7mjvu2v4.css","style"]
+:HL["/puls-moskvy/_next/static/chunks/2ddmrojwgxvfe.css","style"]
+1:[["children",{"s":"__PAGE__","h":160}]]
+0:{"b":"v1on11r1PU7QBG0M5UXXV","t":{"t":{"s":"","h":80,"c":"$Q1"}}}

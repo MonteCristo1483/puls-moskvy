@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 445283,
+    "name": "Молжаниновский район"
+  },
+  "buildings": 1699,
+  "homes": 1138,
+  "poi": 15,
+  "redzones": 132,
+  "geojson_bytes": {
+    "buildings": 2940224,
+    "poi": 2409,
+    "redzones": 43715,
+    "district": 8742
+  },
+  "index_rows": 1138,
+  "index_bytes": 123062,
+  "tiles": null,
+  "seconds": 4.1
+}

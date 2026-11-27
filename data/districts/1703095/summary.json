@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 1703095,
+    "name": "район Щербинка"
+  },
+  "buildings": 15621,
+  "homes": 12760,
+  "poi": 131,
+  "redzones": 541,
+  "geojson_bytes": {
+    "buildings": 31186467,
+    "poi": 20247,
+    "redzones": 193582,
+    "district": 32990
+  },
+  "index_rows": 12760,
+  "index_bytes": 1084288,
+  "tiles": null,
+  "seconds": 6.6
+}

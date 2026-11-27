@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 952191,
+    "name": "район Коньково"
+  },
+  "buildings": 1050,
+  "homes": 456,
+  "poi": 134,
+  "redzones": 223,
+  "geojson_bytes": {
+    "buildings": 1415917,
+    "poi": 20749,
+    "redzones": 55847,
+    "district": 6368
+  },
+  "index_rows": 456,
+  "index_bytes": 50347,
+  "tiles": null,
+  "seconds": 3.7
+}

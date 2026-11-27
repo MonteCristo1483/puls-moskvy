@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 1255577,
+    "name": "район Некрасовка"
+  },
+  "buildings": 624,
+  "homes": 319,
+  "poi": 101,
+  "redzones": 170,
+  "geojson_bytes": {
+    "buildings": 978875,
+    "poi": 15666,
+    "redzones": 51050,
+    "district": 5725
+  },
+  "index_rows": 319,
+  "index_bytes": 33990,
+  "tiles": null,
+  "seconds": 3.7
+}

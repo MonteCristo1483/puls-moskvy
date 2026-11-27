@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 1292499,
+    "name": "Обручевский район"
+  },
+  "buildings": 824,
+  "homes": 383,
+  "poi": 99,
+  "redzones": 122,
+  "geojson_bytes": {
+    "buildings": 1158843,
+    "poi": 15485,
+    "redzones": 32424,
+    "district": 5430
+  },
+  "index_rows": 383,
+  "index_bytes": 41173,
+  "tiles": null,
+  "seconds": 3.8
+}

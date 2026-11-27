@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 446112,
+    "name": "район Филёвский Парк"
+  },
+  "buildings": 1101,
+  "homes": 512,
+  "poi": 113,
+  "redzones": 155,
+  "geojson_bytes": {
+    "buildings": 1520583,
+    "poi": 17427,
+    "redzones": 49016,
+    "district": 3360
+  },
+  "index_rows": 512,
+  "index_bytes": 55001,
+  "tiles": null,
+  "seconds": 3.7
+}

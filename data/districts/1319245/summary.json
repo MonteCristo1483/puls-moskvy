@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 1319245,
+    "name": "район Измайлово"
+  },
+  "buildings": 1293,
+  "homes": 664,
+  "poi": 162,
+  "redzones": 240,
+  "geojson_bytes": {
+    "buildings": 1904794,
+    "poi": 25019,
+    "redzones": 62585,
+    "district": 4981
+  },
+  "index_rows": 664,
+  "index_bytes": 71312,
+  "tiles": null,
+  "seconds": 3.8
+}

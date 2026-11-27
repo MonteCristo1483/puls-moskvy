@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 445284,
+    "name": "район Северный"
+  },
+  "buildings": 1348,
+  "homes": 960,
+  "poi": 68,
+  "redzones": 153,
+  "geojson_bytes": {
+    "buildings": 2483373,
+    "poi": 10549,
+    "redzones": 44025,
+    "district": 3534
+  },
+  "index_rows": 960,
+  "index_bytes": 98512,
+  "tiles": null,
+  "seconds": 3.9
+}

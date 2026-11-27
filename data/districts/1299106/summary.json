@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 1299106,
+    "name": "район Преображенское"
+  },
+  "buildings": 1441,
+  "homes": 587,
+  "poi": 116,
+  "redzones": 188,
+  "geojson_bytes": {
+    "buildings": 1876368,
+    "poi": 17982,
+    "redzones": 64940,
+    "district": 7747
+  },
+  "index_rows": 587,
+  "index_bytes": 65942,
+  "tiles": null,
+  "seconds": 3.8
+}

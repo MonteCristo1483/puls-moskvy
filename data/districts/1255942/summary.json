@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 1255942,
+    "name": "район Замоскворечье"
+  },
+  "buildings": 1825,
+  "homes": 956,
+  "poi": 131,
+  "redzones": 300,
+  "geojson_bytes": {
+    "buildings": 2862498,
+    "poi": 20133,
+    "redzones": 88451,
+    "district": 7588
+  },
+  "index_rows": 956,
+  "index_bytes": 106619,
+  "tiles": null,
+  "seconds": 3.9
+}

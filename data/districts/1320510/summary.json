@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 1320510,
+    "name": "район Силино"
+  },
+  "buildings": 822,
+  "homes": 587,
+  "poi": 39,
+  "redzones": 125,
+  "geojson_bytes": {
+    "buildings": 1527566,
+    "poi": 5978,
+    "redzones": 42089,
+    "district": 8553
+  },
+  "index_rows": 587,
+  "index_bytes": 61565,
+  "tiles": null,
+  "seconds": 4.0
+}

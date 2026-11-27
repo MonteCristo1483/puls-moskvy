@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 950641,
+    "name": "район Царицыно"
+  },
+  "buildings": 1292,
+  "homes": 515,
+  "poi": 119,
+  "redzones": 364,
+  "geojson_bytes": {
+    "buildings": 1569452,
+    "poi": 18460,
+    "redzones": 92800,
+    "district": 5180
+  },
+  "index_rows": 515,
+  "index_bytes": 53911,
+  "tiles": null,
+  "seconds": 3.8
+}

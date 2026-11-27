@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 1250619,
+    "name": "Останкинский район"
+  },
+  "buildings": 1689,
+  "homes": 654,
+  "poi": 105,
+  "redzones": 395,
+  "geojson_bytes": {
+    "buildings": 2210634,
+    "poi": 16181,
+    "redzones": 112612,
+    "district": 9072
+  },
+  "index_rows": 654,
+  "index_bytes": 68788,
+  "tiles": null,
+  "seconds": 4.0
+}

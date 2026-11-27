@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 1320371,
+    "name": "район Крюково"
+  },
+  "buildings": 1682,
+  "homes": 1036,
+  "poi": 98,
+  "redzones": 445,
+  "geojson_bytes": {
+    "buildings": 2832863,
+    "poi": 15222,
+    "redzones": 118148,
+    "district": 24062
+  },
+  "index_rows": 1036,
+  "index_bytes": 96015,
+  "tiles": null,
+  "seconds": 3.9
+}

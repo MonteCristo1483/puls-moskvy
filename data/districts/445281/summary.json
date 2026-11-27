@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 445281,
+    "name": "Савёловский район"
+  },
+  "buildings": 845,
+  "homes": 380,
+  "poi": 70,
+  "redzones": 100,
+  "geojson_bytes": {
+    "buildings": 1158832,
+    "poi": 10718,
+    "redzones": 27094,
+    "district": 3963
+  },
+  "index_rows": 380,
+  "index_bytes": 40568,
+  "tiles": null,
+  "seconds": 3.9
+}

@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 446085,
+    "name": "район Бибирево"
+  },
+  "buildings": 924,
+  "homes": 353,
+  "poi": 149,
+  "redzones": 160,
+  "geojson_bytes": {
+    "buildings": 1091066,
+    "poi": 22953,
+    "redzones": 36972,
+    "district": 4390
+  },
+  "index_rows": 353,
+  "index_bytes": 35553,
+  "tiles": null,
+  "seconds": 3.7
+}

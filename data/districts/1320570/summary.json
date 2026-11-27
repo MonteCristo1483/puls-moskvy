@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 1320570,
+    "name": "район Савёлки"
+  },
+  "buildings": 626,
+  "homes": 291,
+  "poi": 59,
+  "redzones": 126,
+  "geojson_bytes": {
+    "buildings": 847888,
+    "poi": 9071,
+    "redzones": 32604,
+    "district": 15100
+  },
+  "index_rows": 291,
+  "index_bytes": 25765,
+  "tiles": null,
+  "seconds": 3.6
+}

@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 445299,
+    "name": "Хорошёвский район"
+  },
+  "buildings": 1620,
+  "homes": 711,
+  "poi": 113,
+  "redzones": 209,
+  "geojson_bytes": {
+    "buildings": 2237376,
+    "poi": 17578,
+    "redzones": 78090,
+    "district": 6129
+  },
+  "index_rows": 711,
+  "index_bytes": 77046,
+  "tiles": null,
+  "seconds": 3.9
+}

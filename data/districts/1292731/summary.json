@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 1292731,
+    "name": "район Тропарёво-Никулино"
+  },
+  "buildings": 887,
+  "homes": 385,
+  "poi": 129,
+  "redzones": 164,
+  "geojson_bytes": {
+    "buildings": 1247780,
+    "poi": 20028,
+    "redzones": 45969,
+    "district": 5082
+  },
+  "index_rows": 385,
+  "index_bytes": 45309,
+  "tiles": null,
+  "seconds": 3.8
+}

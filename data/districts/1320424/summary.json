@@ -1,0 +1,20 @@
+{
+  "district": {
+    "osm_id": 1320424,
+    "name": "район Старое Крюково"
+  },
+  "buildings": 421,
+  "homes": 272,
+  "poi": 34,
+  "redzones": 139,
+  "geojson_bytes": {
+    "buildings": 729172,
+    "poi": 5378,
+    "redzones": 35331,
+    "district": 10153
+  },
+  "index_rows": 272,
+  "index_bytes": 24243,
+  "tiles": null,
+  "seconds": 3.6
+}
