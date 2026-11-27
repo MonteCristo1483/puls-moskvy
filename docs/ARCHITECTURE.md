@@ -42,6 +42,31 @@ OSM/PMTiles (GitHub Release) ──► существующий пайплайн
 - **Контракт:** `live/meta.json` = `{generated_at, stale, sources:{...}}`; файлы с `?v=<hash>` — на Pages нельзя задать `Cache-Control`, поэтому версия в URL.
 - **Деградация:** последний валидный JSON не удаляется; слой показывает «данные от HH:MM», при `stale>24ч` скрывается с пояснением. Пустой карты не бывает.
 
+### 2.5 Контракт слоя
+
+Слой — плагин из `web/app/layers/contract.ts`, а не импорт в `map.tsx`: карта
+читает только реестр (`layers/registry.ts`) и общий `visible`, поэтому новый
+слой не требует правок в `map.tsx`.
+
+- **Из чего состоит:** `id`, `label`, `defaultVisible`, необязательный
+  `visibilityKey` (чип в панели), `mount(context)` → `LayerHandle` /
+  `unmount()`, хуки `onTimeChange(minutes)`, `onWeather(snapshot)`,
+  `onTheme(theme)` и `View({context})` — UI слоя (плашка, бейдж).
+- **Что ему дают:** `getMap()` (карта MapLibre или `null`, пока она создаётся),
+  `theme` (`data-theme`), `time` (выбранные минуты + текущие МСК), `weather`
+  (снимок Open-Meteo на час: `get`/`at`/`subscribe`), `facts`
+  (`live/meta.json`: статус, дата, признак устаревания).
+- **Что он обязан отдать:** в `unmount` снять всё, что поставил (источники,
+  слои, слушатели, таймеры, `AbortController`); не трогать чужие слои; не
+  дублировать запросы, данные которых уже есть в контексте; честно писать
+  «нет данных», а не пустоту.
+
+**Новый слой за 5 шагов** (пример — «Заведения»): 1) `layers/places.tsx` —
+`LayerPlugin` с `id: "places"`, `label: "Заведения"`, `defaultVisible: false`,
+`visibilityKey: "places"`; 2) `mount` — источник и слой POI; 3) `unmount` —
+снять их и слушатели; 4) `onTheme`/`onTimeChange` — перекраска и пересчёт;
+5) добавить в `LAYERS` (`registry.ts`) и чип в `layers-panel.tsx`.
+
 ## 3. Хостинг
 
 | Вариант | Цена/мес | Плюсы | Минусы |

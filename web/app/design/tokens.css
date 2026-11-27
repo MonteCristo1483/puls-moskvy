@@ -1,0 +1,223 @@
+/* Дизайн-токены «Пульса Москвы» — единственный источник значений палитры,
+   радиусов, отступов, типографики, теней, прозрачностей и длительностей.
+   Тема — только через `data-theme` на <html> (см. web/app/theme.ts): светлые
+   значения в :root, тёмные в [data-theme="dark"]. Компоненты ссылаются на
+   `var(--…)` через Tailwind-классы из блока @theme ниже — правка палитры
+   начинается и заканчивается этим файлом.
+   Цвета взяты в oklch из палитры Tailwind (slate/emerald/amber/red), чтобы
+   внешний вид поверхностей не менялся при переходе на токены. */
+
+:root {
+  color-scheme: light;
+
+  /* ── Палитра: светлая тема ─────────────────────────────────────────── */
+  /* Фон подложки-градиента (globals.css → .map-gradient) */
+  --bg-top: #f7f2e8;
+  --bg-mid: #e9eff5;
+  --bg-bottom: #d9e6f0;
+
+  /* Поверхности */
+  --c-surface: oklch(100% 0 0); /* white */
+  --c-soft: oklch(100% 0 0); /* white: «Сейчас», выключенная галочка */
+  /* Текст */
+  --c-ink: oklch(37.2% 0.044 257.287); /* slate-700 */
+  --c-ink-hover: oklch(37.2% 0.044 257.287); /* slate-700 */
+  --c-ink-2: oklch(55.4% 0.046 257.417); /* slate-500 */
+  --c-ink-3: oklch(70.4% 0.04 256.788); /* slate-400 */
+  --c-ink-idle: oklch(55.4% 0.046 257.417); /* slate-500: выключенный чип */
+  --c-ink-quiet: oklch(44.6% 0.043 257.281); /* slate-600 */
+  --c-icon: oklch(70.4% 0.04 256.788); /* slate-400 */
+  /* Границы и шкалы */
+  --c-border: oklch(86.9% 0.022 252.894); /* slate-300 */
+  --c-track: oklch(92.9% 0.013 255.508); /* slate-200 */
+  --c-tick: oklch(70.4% 0.04 256.788); /* slate-400 */
+  --c-tick-quiet: oklch(86.9% 0.022 252.894); /* slate-300 */
+  --c-thumb-ring: oklch(100% 0 0); /* white */
+  /* Акцент */
+  --c-accent: oklch(69.6% 0.17 162.48); /* emerald-500 */
+  --c-accent-ink: oklch(50.8% 0.118 165.612); /* emerald-700 */
+  --c-accent-contrast: oklch(100% 0 0); /* white */
+  /* Галочка в выключенном чипе: белая и «призрачная» на светлой подложке —
+     так она выглядела до F2 (белый currentColor кружка). В тёмной теме та же
+     белая: кружок темнее подложки, галочка читается как едва заметная. */
+  --c-check-off-ink: oklch(100% 0 0); /* white */
+  /* Предупреждение (плашки-уведомления) */
+  --c-warn: oklch(55.5% 0.163 48.998); /* amber-700 */
+  --c-warn-bg: oklch(98.7% 0.022 95.277); /* amber-50 */
+  --c-warn-bg-strong: oklch(98.7% 0.022 95.277); /* amber-50 */
+  --c-warn-ink: oklch(47.3% 0.137 46.201); /* amber-800 */
+  --c-warn-ink-strong: oklch(41.4% 0.112 45.904); /* amber-900 */
+  --c-warn-action: oklch(47.3% 0.137 46.201); /* amber-800 */
+  --c-warn-action-ink: oklch(98.7% 0.022 95.277); /* amber-50 */
+  --c-warn-action-hover: oklch(41.4% 0.112 45.904); /* amber-900 */
+  --c-warn-quiet: oklch(66.6% 0.179 58.318); /* amber-600 */
+  --c-warn-quiet-hover: oklch(96.2% 0.059 95.617); /* amber-100 */
+  /* Ошибка */
+  --c-danger: oklch(44.4% 0.177 26.899); /* red-800 */
+  --c-danger-bg: oklch(97.1% 0.013 17.38); /* red-50 */
+  /* Служебные подложки вне темы */
+  --c-overlay: rgb(0 0 0 / 70%);
+  --c-overlay-ink: oklch(100% 0 0);
+  /* Дымка и вигнетка поверх канваса карты (globals.css) */
+  --c-haze-top: rgb(227 235 244 / 32%);
+  --c-haze-mid: rgb(227 235 244 / 14%);
+  --c-haze-end: rgb(227 235 244 / 0%);
+  --c-vignette-mid: rgb(18 32 48 / 0%);
+  --c-vignette-edge: rgb(18 32 48 / 14%);
+  /* Бренд (заставка, метаданные PWA) */
+  --c-splash: #6a9d76;
+  --c-splash-ink: oklch(100% 0 0);
+
+  /* ── Прозрачности подложек ─────────────────────────────────────────── */
+  --alpha-panel: 85%; /* плашки и панели */
+  --alpha-soft: 70%; /* кнопка «Сейчас» */
+  --alpha-chip-off: 55%; /* выключенный чип */
+  --alpha-check-off: 60%; /* выключенная галочка */
+
+  /* ── Производные подложки (цвет + прозрачность в одном токене) ─────── */
+  --c-panel: color-mix(in oklab, var(--c-surface) var(--alpha-panel), transparent);
+  --c-panel-soft: color-mix(in oklab, var(--c-soft) var(--alpha-soft), transparent);
+  --c-chip-off: color-mix(in oklab, var(--c-surface) var(--alpha-chip-off), transparent);
+  --c-check-off: color-mix(in oklab, var(--c-soft) var(--alpha-check-off), transparent);
+
+  /* ── Радиусы ───────────────────────────────────────────────────────── */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px; /* плашки, панели, бейджи */
+  --r-pill: 9999px;
+
+  /* ── Отступы (2/4/6/8/12/16 px) ────────────────────────────────────── */
+  --sp-2: 2px;
+  --sp-4: 4px;
+  --sp-6: 6px;
+  --sp-8: 8px;
+  --sp-12: 12px;
+  --sp-16: 16px;
+
+  /* ── Типографика ───────────────────────────────────────────────────── */
+  --fs-9: 9px;
+  --fs-10: 10px;
+  --fs-105: 10.5px;
+  --fs-11: 11px;
+  --fs-12: 12px;
+  --fs-13: 13px;
+  --fs-15: 15px;
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* ── Тени ──────────────────────────────────────────────────────────── */
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+  /* ── Длительности переходов ────────────────────────────────────────── */
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-slow: 300ms;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-top: #1b222c;
+  --bg-mid: #232b37;
+  --bg-bottom: #2a3441;
+
+  --c-surface: oklch(20.8% 0.042 265.755); /* slate-900 */
+  --c-soft: oklch(27.9% 0.041 260.031); /* slate-800 */
+  --c-ink: oklch(92.9% 0.013 255.508); /* slate-200 */
+  --c-ink-hover: oklch(96.8% 0.007 247.896); /* slate-100 */
+  --c-ink-2: oklch(70.4% 0.04 256.788); /* slate-400 */
+  --c-ink-3: oklch(55.4% 0.046 257.417); /* slate-500 */
+  --c-ink-idle: oklch(86.9% 0.022 252.894); /* slate-300 */
+  --c-ink-quiet: oklch(86.9% 0.022 252.894); /* slate-300 */
+  --c-icon: oklch(55.4% 0.046 257.417); /* slate-500 */
+  --c-border: oklch(55.4% 0.046 257.417); /* slate-500 */
+  --c-track: oklch(37.2% 0.044 257.287); /* slate-700 */
+  --c-tick: oklch(55.4% 0.046 257.417); /* slate-500 */
+  --c-tick-quiet: oklch(44.6% 0.043 257.281); /* slate-600 */
+  --c-thumb-ring: oklch(20.8% 0.042 265.755); /* slate-900 */
+  --c-accent: oklch(69.6% 0.17 162.48); /* emerald-500 */
+  --c-accent-ink: oklch(76.5% 0.177 163.223); /* emerald-400 */
+  --c-warn: oklch(82.8% 0.189 84.429); /* amber-400 */
+  --c-warn-bg: color-mix(in oklab, oklch(27.9% 0.077 45.635) 80%, transparent);
+  --c-warn-bg-strong: color-mix(in oklab, oklch(27.9% 0.077 45.635) 85%, transparent);
+  --c-warn-ink: oklch(92.4% 0.12 95.746); /* amber-200 */
+  --c-warn-ink-strong: oklch(96.2% 0.059 95.617); /* amber-100 */
+  --c-warn-action: oklch(92.4% 0.12 95.746); /* amber-200 */
+  --c-warn-action-ink: oklch(27.9% 0.077 45.635); /* amber-950 */
+  --c-warn-action-hover: oklch(96.2% 0.059 95.617); /* amber-100 */
+  --c-warn-quiet: oklch(87.9% 0.169 91.605); /* amber-300 */
+  --c-warn-quiet-hover: oklch(41.4% 0.112 45.904); /* amber-900 */
+  --c-danger: oklch(88.5% 0.062 18.334); /* red-200 */
+  --c-danger-bg: color-mix(in oklab, oklch(25.8% 0.092 26.042) 70%, transparent);
+  --c-vignette-mid: rgb(4 8 16 / 0%);
+  --c-vignette-edge: rgb(4 8 16 / 28%);
+
+  --alpha-panel: 80%;
+  --alpha-soft: 70%;
+  --alpha-chip-off: 70%;
+  --alpha-check-off: 80%;
+}
+
+/* Мостик в Tailwind: классы компонентов ссылаются только на токены. */
+@theme inline {
+  --color-surface: var(--c-surface);
+  --color-soft: var(--c-soft);
+  --color-panel: var(--c-panel);
+  --color-panel-soft: var(--c-panel-soft);
+  --color-chip-off: var(--c-chip-off);
+  --color-check-off: var(--c-check-off);
+  --color-ink: var(--c-ink);
+  --color-ink-hover: var(--c-ink-hover);
+  --color-ink-2: var(--c-ink-2);
+  --color-ink-3: var(--c-ink-3);
+  --color-ink-idle: var(--c-ink-idle);
+  --color-ink-quiet: var(--c-ink-quiet);
+  --color-icon: var(--c-icon);
+  --color-border: var(--c-border);
+  --color-track: var(--c-track);
+  --color-tick: var(--c-tick);
+  --color-tick-quiet: var(--c-tick-quiet);
+  --color-thumb-ring: var(--c-thumb-ring);
+  --color-accent: var(--c-accent);
+  --color-accent-ink: var(--c-accent-ink);
+  --color-accent-contrast: var(--c-accent-contrast);
+  --color-check-off-ink: var(--c-check-off-ink);
+  --color-warn: var(--c-warn);
+  --color-warn-bg: var(--c-warn-bg);
+  --color-warn-bg-strong: var(--c-warn-bg-strong);
+  --color-warn-ink: var(--c-warn-ink);
+  --color-warn-ink-strong: var(--c-warn-ink-strong);
+  --color-warn-action: var(--c-warn-action);
+  --color-warn-action-ink: var(--c-warn-action-ink);
+  --color-warn-action-hover: var(--c-warn-action-hover);
+  --color-warn-quiet: var(--c-warn-quiet);
+  --color-warn-quiet-hover: var(--c-warn-quiet-hover);
+  --color-danger: var(--c-danger);
+  --color-danger-bg: var(--c-danger-bg);
+  --color-overlay: var(--c-overlay);
+  --color-overlay-ink: var(--c-overlay-ink);
+  --color-splash: var(--c-splash);
+  --color-splash-ink: var(--c-splash-ink);
+
+  --radius-control: var(--r-md); /* кнопки: было rounded-xl = 12px */
+  --radius-plate: var(--r-lg);
+  --radius-pill: var(--r-pill);
+
+  --shadow-plate: var(--shadow-sm);
+
+  --text-9: var(--fs-9);
+  --text-10: var(--fs-10);
+  --text-105: var(--fs-105);
+  --text-11: var(--fs-11);
+  --text-12: var(--fs-12);
+  --text-13: var(--fs-13);
+  --text-15: var(--fs-15);
+
+  --duration-fast: var(--dur-fast);
+  --duration-base: var(--dur-base);
+  --duration-slow: var(--dur-slow);
+}

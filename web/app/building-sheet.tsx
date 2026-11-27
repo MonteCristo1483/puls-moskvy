@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { SCORE_COLORS } from "./map/palette";
 
 export type BonusEntry = {
   distance_m: number;
@@ -135,10 +136,10 @@ function distancePhrase(distance: number): string {
 }
 
 function indexColor(index: number | null): string {
-  if (index === null) return "#c9ced3";
-  if (index < 5) return "#d98f86";
-  if (index < 7) return "#c9bf9e";
-  return "#7fb069";
+  if (index === null) return SCORE_COLORS.none;
+  if (index < 5) return SCORE_COLORS.vlow;
+  if (index < 7) return SCORE_COLORS.mid;
+  return SCORE_COLORS.ok;
 }
 
 function Ring({ index, size = 84 }: { index: number | null; size?: number }) {
@@ -150,7 +151,7 @@ function Ring({ index, size = 84 }: { index: number | null; size?: number }) {
   const fsSub = size > 60 ? 10 : 7;
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeOpacity="0.8" strokeWidth={stroke} className="dark:stroke-slate-700 dark:stroke-opacity-40" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} className="stroke-slate-200 stroke-opacity-80 dark:stroke-slate-700 dark:stroke-opacity-40" />
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -235,7 +236,7 @@ function ScoreChip({
     >
       <div className="flex items-baseline justify-between gap-1">
         <span
-          className={`truncate text-[11px] font-medium ${
+          className={`truncate text-11 font-medium ${
             positive
               ? "text-emerald-900 dark:text-emerald-200"
               : "text-red-900/80 dark:text-red-200/80"
@@ -244,7 +245,7 @@ function ScoreChip({
           {label}
         </span>
         <span
-          className={`shrink-0 text-[11px] font-bold ${
+          className={`shrink-0 text-11 font-bold ${
             positive
               ? "text-emerald-700 dark:text-emerald-300"
               : "text-red-700 dark:text-red-300"
@@ -564,7 +565,7 @@ export default function BuildingSheet({
                       </li>
                     ))}
                   </ul>
-                  <div className="mt-2 text-[11px] leading-tight text-slate-400 dark:text-slate-500">
+                  <div className="mt-2 text-11 leading-tight text-slate-400 dark:text-slate-500">
                     {compactInfo.missing.length > 0 ? `Данные: ${compactInfo.missing.join(" · ")}` : "Данные по дому и окружению полные"}
                   </div>
                 </div>
@@ -583,7 +584,7 @@ export default function BuildingSheet({
                 </div>
               )}
               {!compact && hiddenCount > 0 && (
-                <div className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
+                <div className="mt-1 text-10 text-slate-400 dark:text-slate-500">
                   Ещё {hiddenCount} — в «Почему такой балл»
                 </div>
               )}
@@ -636,7 +637,7 @@ export default function BuildingSheet({
                     </svg>
                   </summary>
                   <div className="mt-3 space-y-3">
-                    <div className="text-[11px] leading-tight text-slate-400 dark:text-slate-500">
+                    <div className="text-11 leading-tight text-slate-400 dark:text-slate-500">
                       Из чего: {base.toFixed(1)} + {bonusSum.toFixed(1)} −{" "}
                       {Math.abs(penaltySum).toFixed(1)} = {rawTotal.toFixed(1)}
                       {clamped && building.index !== null
@@ -793,7 +794,7 @@ export default function BuildingSheet({
                   />
                 </div>
               )}
-              <p className="mt-3 text-center text-[11px] leading-tight text-slate-400 dark:text-slate-500">
+              <p className="mt-3 text-center text-11 leading-tight text-slate-400 dark:text-slate-500">
                 Справочная расчётная оценка на основе открытых данных. Не является
                 заключением экспертизы и не может использоваться для оценки стоимости
                 недвижимости.

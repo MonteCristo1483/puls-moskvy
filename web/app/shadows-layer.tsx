@@ -16,8 +16,10 @@
 import { useEffect, useRef, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import type { Feature, FeatureCollection, MultiPolygon, Point } from "geojson";
+import { Pill } from "./design";
 import type { Theme } from "./theme";
 import { fetchWeather, weatherAt, type WeatherSnapshot, type WeatherValues } from "./live-weather";
+import { DUST_COLORS, SHADOW_PAINT } from "./map/palette";
 import {
   formatClock,
   moscowClockMinutes,
@@ -49,21 +51,8 @@ const COMPUTE_MIN_ZOOM = 12.8;
 const MAX_BUILDINGS = 600;
 const MOVE_DEBOUNCE_MS = 140;
 
-const SHADOW_PAINT: Record<Theme, { color: string; opacity: number }> = {
-  // Тени кадра растворены в один MultiPolygon, поэтому альфа больше не
-  // складывается на перекрытиях: 0.19 в светлой теме — ровная «тень на земле»,
-  // подложка (улицы, парк, номера домов) остаётся читаемой. В тёмной подложке
-  // нужен чуть больший контраст, но не «выжигание».
-  light: { color: "#0f172a", opacity: 0.19 },
-  dark: { color: "#000000", opacity: 0.32 },
-};
-
 const DUST_PIXEL_RATIO = 2;
 const DUST_ICON_PX = 40;
-const DUST_COLORS: Record<Theme, { core: string; halo: string }> = {
-  light: { core: "#b45309", halo: "rgba(255,255,255,0.9)" },
-  dark: { core: "#fbbf24", halo: "rgba(6,12,20,0.8)" },
-};
 
 type ShadowStats = {
   status: "loading" | "ok" | "night" | "low" | "zoom";
@@ -770,7 +759,7 @@ export default function ShadowsLayer({
         : `пыль: ${stats.dust} строек · ветер недоступен`;
 
   return (
-    <div
+    <Pill
       data-shadows-pill="1"
       data-shadows-status={stats.status}
       data-shadows-time={timeLabel}
@@ -792,19 +781,15 @@ export default function ShadowsLayer({
       }
       role="status"
       title="Тени: проекция контура дома вдоль солнечного луча (не «настоящие» 3D-тени). Азимут от севера, высота солнца над горизонтом. Пыль: ветер Open-Meteo над полигонами строек из OSM."
-      className="absolute bottom-[3.4rem] left-3 z-20 flex select-none flex-col items-start gap-0.5 rounded-2xl bg-white/85 px-2.5 py-1.5 text-slate-700 shadow-sm backdrop-blur transition-colors dark:bg-slate-900/80 dark:text-slate-200"
+      className="absolute bottom-[3.4rem] left-3 z-20"
     >
-      <span className="text-[13px] font-semibold leading-none">
+      <span className="text-13 font-semibold leading-none">
         Тени на {timeLabel}
       </span>
-      <span className="text-[10.5px] leading-none text-slate-500 dark:text-slate-400">
-        {statusLine}
-      </span>
+      <span className="text-105 leading-none text-ink-2">{statusLine}</span>
       {dustLine && (
-        <span className="text-[10.5px] leading-none text-slate-500 dark:text-slate-400">
-          {dustLine}
-        </span>
+        <span className="text-105 leading-none text-ink-2">{dustLine}</span>
       )}
-    </div>
+    </Pill>
   );
 }

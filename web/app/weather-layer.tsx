@@ -2,8 +2,11 @@
 
 // Слой «Погода и ветер» (S2). Данные — Open-Meteo напрямую из браузера
 // (ADR-001), стрелки — GeoJSON symbol-слой MapLibre с иконкой из canvas,
-// плашка времени и источника. Всё живёт в одном компоненте, map.tsx только
-// вставляет его в разметку; карту берём из window.__map (её создаёт map.tsx).
+// плашка времени и источника. Всё живёт в одном компоненте; в разметку его
+// вставляет хост слоёв (layers/host.tsx) по реестру, поэтому map.tsx про
+// устройство слоя не знает. Карту берём из window.__map (её создаёт map.tsx).
+// Снимок погоды публикуется в общий стек (layers/weather-store.ts) — другим
+// слоям второй запрос не нужен.
 //
 // S4: если в URL выбран час (`?t=HH:MM`), стрелки и плашка берут значения
 // этого часа из того же часового ряда, что пришёл с «текущей» погодой —
@@ -12,6 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import type { Feature, FeatureCollection, Point } from "geojson";
+import { Pill } from "./design";
 import type { Theme } from "./theme";
 import {
   fetchWeather,
@@ -25,6 +29,8 @@ import {
   type WeatherValues,
 } from "./live-weather";
 import { moscowClockMinutes } from "./solar";
+import { WIND_TIER_COLORS, WIND_TIER_HALO } from "./map/palette";
+import { weatherStore } from "./layers/weather-store";
 
 const SOURCE_ID = "weather-wind";
 const LAYER_ID = "weather-wind-arrows";
@@ -37,16 +43,6 @@ const MIN_ARROWS = 12;
 const FALLBACK_CENTER: [number, number] = [37.6173, 55.7558]; // [lon, lat]
 
 type WindProps = { icon: string; rotate: number; speed: number };
-
-const TIER_COLORS: Record<Theme, readonly [string, string, string, string]> = {
-  light: ["#64748b", "#0f766e", "#b45309", "#be123c"],
-  dark: ["#a3b3c7", "#5eead4", "#fcd34d", "#fb7185"],
-};
-
-const TIER_HALO: Record<Theme, string> = {
-  light: "rgba(255,255,255,0.92)",
-  dark: "rgba(6,12,20,0.8)",
-};
 
 /** Скорость (м/с) → ступень цвета: тихо, слабый, заметный, сильный. */
 function tierForSpeed(speed: number): number {
@@ -102,8 +98,8 @@ function makeArrowImage(theme: Theme, tier: number): ImageData | null {
   ctx.scale(ARROW_PIXEL_RATIO, ARROW_PIXEL_RATIO);
   const center = ARROW_BASE_PX / 2;
   // Подложка контрастна и к карте, и к 3D-домам в обеих темах.
-  drawArrow(ctx, center, center, 32, 12, TIER_HALO[theme], 8.5);
-  drawArrow(ctx, center, center, 32, 12, TIER_COLORS[theme][tier], 4.2);
+  drawArrow(ctx, center, center, 32, 12, WIND_TIER_HALO[theme], 8.5);
+  drawArrow(ctx, center, center, 32, 12, WIND_TIER_COLORS[theme][tier], 4.2);
   return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
 
@@ -336,6 +332,8 @@ export default function WeatherLayer({
           if (controller.signal.aborted) return;
           setSnapshot(data);
           setStatus("ok");
+          // Общий стек погоды: другие слои читают снимок без второго запроса.
+          weatherStore.publish(data);
         })
         .catch(() => {
           if (controller.signal.aborted) return;
@@ -472,7 +470,7 @@ export default function WeatherLayer({
       : "нет сети · Open-Meteo";
 
   return (
-    <div
+    <Pill
       data-weather-pill="1"
       data-weather-status={status}
       data-weather-temp={values ? values.temperatureC.toFixed(2) : undefined}
@@ -484,20 +482,16 @@ export default function WeatherLayer({
       data-weather-kind={kind ?? undefined}
       role="status"
       title="Погода и ветер: Open-Meteo, данные CC BY 4.0. Стрелки показывают, куда дует ветер; обновление раз в 15 минут."
-      className="absolute bottom-2 left-3 z-20 flex select-none flex-col items-start gap-0.5 rounded-2xl bg-white/85 px-2.5 py-1.5 text-slate-700 shadow-sm backdrop-blur transition-colors dark:bg-slate-900/80 dark:text-slate-200"
+      className="absolute bottom-2 left-3 z-20"
     >
-      <span className="text-[13px] font-semibold leading-none">
-        {valueLine}
-      </span>
+      <span className="text-13 font-semibold leading-none">{valueLine}</span>
       <span
-        className={`text-[10.5px] leading-none ${
-          stale
-            ? "font-medium text-amber-700 dark:text-amber-400"
-            : "text-slate-500 dark:text-slate-400"
+        className={`text-105 leading-none ${
+          stale ? "font-medium text-warn" : "text-ink-2"
         }`}
       >
         {sourceLine}
       </span>
-    </div>
+    </Pill>
   );
 }
