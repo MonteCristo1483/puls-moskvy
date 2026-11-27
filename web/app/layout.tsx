@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import type { ReactNode } from "react";
+import { THEME_COLOR } from "./design/tokens";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#6a9d76",
+  themeColor: THEME_COLOR,
 };
 
 const themeInit = `try{var t=localStorage.getItem("karta-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}`;

@@ -25,7 +25,7 @@ export default function SharePage() {
   return (
     <main className="map-gradient flex min-h-dvh flex-col items-center justify-center gap-3 px-6 text-center">
       <div className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-300">
-        <span className="inline-block size-4 rounded-full border-[5px] border-[#6a9d76]" />
+        <span className="inline-block size-4 rounded-pill border-[5px] border-splash" />
         Пульс Москвы
       </div>
       {missing ? (

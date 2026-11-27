@@ -5,16 +5,14 @@ import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import BuildingSheet from "./building-sheet";
 import type { BuildingBreakdown, SelectedBuilding } from "./building-sheet";
-import FactsBadge from "./facts-badge";
+import LayerHost from "./layers/host";
 import LayersPanel, { DEFAULT_VISIBILITY } from "./layers-panel";
 import type { Visibility } from "./layers-panel";
 import SearchBox from "./search-box";
 import type { SearchItem } from "./search-box";
-import ShadowsLayer from "./shadows-layer";
 import { THEME_KEY, initialTheme } from "./theme";
 import type { Theme } from "./theme";
 import Timeline, { readTimelineParam, writeTimelineParam } from "./timeline";
-import WeatherLayer from "./weather-layer";
 import { mountMap } from "./map/engine";
 import { ISOCHRONE_URL, fetchGzipJson } from "./map/tiles";
 import type { BuildingRoutes, FlatRoutes, IsoGeometry, IsochroneData } from "./map/tiles";
@@ -310,7 +308,7 @@ export default function Map() {
         <div
           ref={perfRef}
           data-perf-overlay="1"
-          className="pointer-events-none absolute left-2 top-2 z-30 max-w-[92vw] rounded-md bg-black/70 px-2 py-1 font-mono text-[10px] leading-tight text-white"
+          className="pointer-events-none absolute left-2 top-2 z-30 max-w-[92vw] rounded-md bg-overlay px-2 py-1 font-mono text-10 leading-tight text-overlay-ink"
           aria-hidden
         />
       )}
@@ -322,9 +320,8 @@ export default function Map() {
         theme={theme}
         onThemeToggle={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
       />
-      <WeatherLayer visible={visible.weather} theme={theme} minutes={clockMinutes} />
-      <FactsBadge />
-      <ShadowsLayer visible={visible.shadows} theme={theme} minutes={clockMinutes} />
+      {/* Слои карты: реестр сам знает, что подключать и что рисовать. */}
+      <LayerHost visible={visible} theme={theme} minutes={clockMinutes} />
       <Timeline minutes={clockMinutes} onChange={changeClockMinutes} />
       <SearchBox
         items={searchItems}
@@ -338,14 +335,14 @@ export default function Map() {
         onContourChange={setContour}
       />
       {deepLinkError && (
-        <div className="absolute bottom-6 left-1/2 z-20 w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800 shadow-xl dark:bg-amber-950/80 dark:text-amber-200">
+        <div className="absolute bottom-6 left-1/2 z-20 w-[min(92vw,420px)] -translate-x-1/2 rounded-plate bg-warn-bg px-4 py-3 text-sm text-warn-ink shadow-xl">
           <div className="flex items-start gap-2">
             <span className="flex-1">{deepLinkError}</span>
             <button
               type="button"
               onClick={() => setDeepLinkError(null)}
               aria-label="Закрыть"
-              className="rounded-full p-0.5 text-amber-600 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-900"
+              className="rounded-pill p-0.5 text-warn-quiet hover:bg-warn-quiet-hover"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
                 <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
@@ -356,14 +353,14 @@ export default function Map() {
       )}
       {nonHomeNotice && (
         <div
-          className="absolute bottom-6 left-1/2 z-20 w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800 shadow-xl dark:bg-amber-950/85 dark:text-amber-200"
+          className="absolute bottom-6 left-1/2 z-20 w-[min(92vw,420px)] -translate-x-1/2 rounded-plate bg-warn-bg-strong px-4 py-3 text-sm text-warn-ink shadow-xl"
           role="status"
         >
           <div>
             Нежилое здание. Индекс окружения считается только для жилых домов
           </div>
           {nonHomeNotice.status === "far" ? (
-            <div className="mt-2 text-xs font-semibold text-amber-900 dark:text-amber-100">
+            <div className="mt-2 text-xs font-semibold text-warn-ink-strong">
               Рядом нет жилых домов
             </div>
           ) : (
@@ -374,7 +371,7 @@ export default function Map() {
                 nonHomeNotice.status === "error"
               }
               onClick={() => void findNearestHomeRef.current?.(nonHomeNotice.point)}
-              className="mt-2.5 inline-flex items-center justify-center rounded-xl bg-amber-800 px-3.5 py-1.5 text-xs font-semibold text-amber-50 shadow-sm transition hover:bg-amber-900 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-amber-100"
+              className="mt-2.5 inline-flex items-center justify-center rounded-control bg-warn-action px-3.5 py-1.5 text-xs font-semibold text-warn-action-ink shadow-plate transition hover:bg-warn-action-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {nonHomeNotice.status === "loading"
                 ? "ищу…"
@@ -385,33 +382,33 @@ export default function Map() {
       )}
       {notice && (
         <div
-          className="absolute bottom-6 left-1/2 z-20 w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800 shadow-xl dark:bg-amber-950/80 dark:text-amber-200"
+          className="absolute bottom-6 left-1/2 z-20 w-[min(92vw,420px)] -translate-x-1/2 rounded-plate bg-warn-bg px-4 py-3 text-sm text-warn-ink shadow-xl"
           role="status"
         >
           {notice}
         </div>
       )}
       {fatalError && (
-        <div className="absolute inset-x-4 top-1/3 z-20 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-800 shadow-lg dark:bg-red-950/70 dark:text-red-200">
+        <div className="absolute inset-x-4 top-1/3 z-20 rounded-plate bg-danger-bg px-4 py-3 text-sm text-danger shadow-lg">
           {fatalError}
         </div>
       )}
       {splash !== "gone" && (
         <div
-          className={`absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-[#6a9d76] transition-opacity duration-300 ${
+          className={`absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-splash text-splash-ink transition-opacity duration-slow ${
             splash === "fade" ? "opacity-0" : "opacity-100"
           }`}
           aria-hidden
         >
           <svg width="72" height="72" viewBox="0 0 512 512">
-            <circle cx="256" cy="256" r="130" fill="none" stroke="#ffffff" strokeWidth="64" />
+            <circle cx="256" cy="256" r="130" fill="none" stroke="currentColor" strokeWidth="64" />
           </svg>
-          <div className="text-lg font-semibold tracking-wide text-white">
+          <div className="text-lg font-semibold tracking-wide">
             Пульс Москвы
           </div>
         </div>
       )}
-      <div className="pointer-events-none absolute bottom-2 right-3 max-w-md text-right text-[11px] leading-tight text-slate-500 dark:text-slate-400">
+      <div className="pointer-events-none absolute bottom-2 right-3 max-w-md text-right text-11 leading-tight text-ink-2">
         © OpenStreetMap contributors, ODbL · Пульс Москвы — справочная
         информация по открытым данным, не является замером или оценкой стоимости
       </div>
