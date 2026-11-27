@@ -1,4 +1,3 @@
-import type { Theme } from "./theme";
 import { ICON_PATHS, type IconKey } from "./icons";
 import { Chip, ChipButton } from "./design";
 import { LAYERS } from "./layers/registry";
@@ -82,45 +81,15 @@ function LayerIcon({ d }: { d: string }) {
   );
 }
 
-function SunIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5 5l1.7 1.7M17.3 17.3 19 19M19 5l-1.7 1.7M6.7 17.3 5 19" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M20 13.6A8.1 8.1 0 0 1 10.4 4a8.1 8.1 0 1 0 9.6 9.6Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 export default function LayersPanel({
   visibility,
   onToggle,
-  theme,
-  onThemeToggle,
 }: {
   visibility: Visibility;
   onToggle: (key: LayerKey) => void;
-  theme: Theme;
-  onThemeToggle: () => void;
 }) {
   return (
     <div className="absolute left-3 top-[4.5rem] z-10 flex max-w-[calc(100%-1.5rem)] flex-col items-start gap-1.5 xl:top-3">
-      <button
-        type="button"
-        onClick={onThemeToggle}
-        aria-label="Переключить тему"
-        title={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
-        className="flex h-8 w-8 items-center justify-center rounded-pill bg-panel text-ink-quiet shadow-plate backdrop-blur transition-colors hover:bg-soft"
-      >
-        {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-      </button>
       <div className="flex flex-col items-start gap-1.5">
         {ITEMS.map(({ key, label, icon, button }) => {
           const content = (
