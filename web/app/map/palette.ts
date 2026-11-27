@@ -226,6 +226,38 @@ export const DUST_COLORS: Record<Theme, { core: string; halo: string }> = {
 };
 
 /**
+ * Слой «Стройки и работы» (S7): линии/полигоны/точки набора 2855. Цвет —
+ * картографический (WebGL не понимает CSS-переменные), поэтому живёт в
+ * палитре тем, как и цвета остальных слоёв. Янтарный — «работы/раскопки»,
+ * не красный: красные зоны уже заняли красный.
+ */
+export const WORKS_PAINT: Record<
+  Theme,
+  {
+    line: string;
+    fill: string;
+    fillOpacity: number;
+    point: string;
+    pointStroke: string;
+  }
+> = {
+  light: {
+    line: "#b45309",
+    fill: "#c2410c",
+    fillOpacity: 0.16,
+    point: "#b45309",
+    pointStroke: "#ffffff",
+  },
+  dark: {
+    line: "#fbbf24",
+    fill: "#fb923c",
+    fillOpacity: 0.2,
+    point: "#fcd34d",
+    pointStroke: "#0b1220",
+  },
+};
+
+/**
  * Кольцо балла в карточке дома: цвет — презентация данных, не тема, поэтому
  * живёт в палитре, а не в токенах интерфейса.
  */
