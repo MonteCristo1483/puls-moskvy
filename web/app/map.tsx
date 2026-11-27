@@ -18,6 +18,7 @@ import { ICON_PATHS, type IconKey } from "./icons";
 import { initialTheme, MAP_FOG, THEME_KEY } from "./theme";
 import type { Theme } from "./theme";
 import WeatherLayer from "./weather-layer";
+import ShadowsLayer from "./shadows-layer";
 
 // Пути относительные — статический экспорт живёт в подпапке
 // basePath (/puls-moskvy на GitHub Pages).
@@ -5313,6 +5314,7 @@ export default function Map() {
         onThemeToggle={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
       />
       <WeatherLayer visible={visible.weather} theme={theme} />
+      <ShadowsLayer visible={visible.shadows} theme={theme} />
       <SearchBox
         items={searchItems}
         onSelect={(id) => selectRef.current?.(id)}
