@@ -22,3 +22,6 @@ web/test-results/
 web/playwright-report/
 docs/shots/
 web/shots/
+
+# D2a: рабочие PNG пробы (подложка и её кропы) — в репозиторий не идут
+web/probe/*.png

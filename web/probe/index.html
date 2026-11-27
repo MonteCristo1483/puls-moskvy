@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ru" data-v="a">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Пульс Москвы · D2a · проба визуального языка</title>
+<script>
+  /* Язык выбирается параметром ?v=a|b|c. Скрипт только ставит атрибут на <html>. */
+  var v = new URLSearchParams(location.search).get('v');
+  if (v === 'a' || v === 'b' || v === 'c') document.documentElement.dataset.v = v;
+</script>
+<link rel="stylesheet" href="probe.css">
+</head>
+<body>
+
+<!-- Подложка: реальный снимок карты (web/shots/live-after-f2.png -> bg.png). -->
+<div class="bg" aria-hidden="true"><div class="bg-img"></div><div class="bg-tint"></div><div class="bg-grid"></div></div>
+
+<div class="screen">
+
+  <!-- 1. ПОИСК -->
+  <form class="p search" data-ui aria-label="Поиск адреса" onsubmit="return false">
+    <svg class="search-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6.2"/><path d="M13.6 13.6 17.2 17.2"/></svg>
+    <input class="search-in" type="search" autocomplete="off" placeholder="Адрес дома — улица, номер" aria-label="Адрес дома — улица, номер">
+  </form>
+
+  <!-- 2. ПАНЕЛЬ СЛОЁВ -->
+  <section class="p layers" data-ui aria-label="Слои">
+    <button class="layers-btn" type="button" aria-expanded="true">
+      <span class="chev" aria-hidden="true"></span>
+      <span class="layers-t">Слои</span>
+    </button>
+
+    <div class="layers-body">
+      <article class="cat">
+        <header class="cat-h">
+          <span class="cat-t">Транспорт</span>
+          <span class="cat-s">метро, маршруты</span>
+          <span class="lamp"><i class="led is-on"></i><i class="led is-off"></i></span>
+        </header>
+      </article>
+
+      <article class="cat">
+        <header class="cat-h">
+          <span class="cat-t">Природа</span>
+          <span class="cat-s">парки</span>
+          <span class="lamp"><i class="led is-on"></i></span>
+        </header>
+      </article>
+
+      <article class="cat">
+        <header class="cat-h">
+          <span class="cat-t">Инфраструктура</span>
+          <span class="cat-s">школы, сады, магазины</span>
+          <span class="lamp"><i class="led is-on"></i><i class="led is-on"></i><i class="led is-off"></i></span>
+        </header>
+      </article>
+
+      <article class="cat is-open">
+        <header class="cat-h">
+          <span class="cat-t">Городские работы</span>
+          <span class="cat-s">стройки и работы, красные зоны</span>
+        </header>
+        <ul class="lay-list">
+          <li class="lay is-on"><i class="led"></i><span class="lay-n">стройки и работы</span><span class="lay-s">вкл</span></li>
+          <li class="lay is-on"><i class="led"></i><span class="lay-n">красные зоны</span><span class="lay-s">вкл</span></li>
+        </ul>
+      </article>
+
+      <article class="cat">
+        <header class="cat-h">
+          <span class="cat-t">Атмосфера</span>
+          <span class="cat-s">погода и ветер</span>
+          <span class="lamp"><i class="led is-on"></i></span>
+        </header>
+      </article>
+
+      <!-- 7. ПОИ-ИКОНКИ: 4 типа, три размера подряд -->
+      <section class="poi" aria-label="ПОИ">
+        <p class="lamp-key">
+          <i class="led is-on"></i><span>вкл</span>
+          <i class="led is-off"></i><span>выкл</span>
+        </p>
+        <h2 class="poi-h">ПОИ<span class="poi-sz">26 · 30 · 36 px</span></h2>
+
+        <div class="poi-row">
+          <span class="poi-name">метро</span>
+          <span class="poi-ic s26"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.6"/><path d="M6.9 16.4V7.6l5.1 5.2 5.1-5.2v8.8"/></svg></span>
+          <span class="poi-ic s30"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.6"/><path d="M6.9 16.4V7.6l5.1 5.2 5.1-5.2v8.8"/></svg></span>
+          <span class="poi-ic s36"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.6"/><path d="M6.9 16.4V7.6l5.1 5.2 5.1-5.2v8.8"/></svg></span>
+        </div>
+
+        <div class="poi-row">
+          <span class="poi-name">парк</span>
+          <span class="poi-ic s26"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 5.6 12.2h3.5L5.4 18h13.2l-3.7-5.8h3.5L12 3.2Z"/><path d="M12 18v3.2"/></svg></span>
+          <span class="poi-ic s30"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 5.6 12.2h3.5L5.4 18h13.2l-3.7-5.8h3.5L12 3.2Z"/><path d="M12 18v3.2"/></svg></span>
+          <span class="poi-ic s36"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 5.6 12.2h3.5L5.4 18h13.2l-3.7-5.8h3.5L12 3.2Z"/><path d="M12 18v3.2"/></svg></span>
+        </div>
+
+        <div class="poi-row">
+          <span class="poi-name">школа</span>
+          <span class="poi-ic s26"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.4 20.8h17.2"/><path d="M5.8 20.8V9.6h9.4v11.2"/><path d="M15.2 12.8h3v8"/><path d="M9.4 20.8v-5.2h3.2v5.2"/><path d="M10.6 6.4V3.4h3.6l-1.1 1.5 1.1 1.5h-3.6"/></svg></span>
+          <span class="poi-ic s30"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.4 20.8h17.2"/><path d="M5.8 20.8V9.6h9.4v11.2"/><path d="M15.2 12.8h3v8"/><path d="M9.4 20.8v-5.2h3.2v5.2"/><path d="M10.6 6.4V3.4h3.6l-1.1 1.5 1.1 1.5h-3.6"/></svg></span>
+          <span class="poi-ic s36"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.4 20.8h17.2"/><path d="M5.8 20.8V9.6h9.4v11.2"/><path d="M15.2 12.8h3v8"/><path d="M9.4 20.8v-5.2h3.2v5.2"/><path d="M10.6 6.4V3.4h3.6l-1.1 1.5 1.1 1.5h-3.6"/></svg></span>
+        </div>
+
+        <div class="poi-row">
+          <span class="poi-name">стройка</span>
+          <span class="poi-ic s26"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6 17.9 18.6H6.1L12 3.6Z"/><path d="M8.9 11.4h6.2"/><path d="M7.3 15.6h9.4"/><path d="M4.4 20.4h15.2"/></svg></span>
+          <span class="poi-ic s30"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6 17.9 18.6H6.1L12 3.6Z"/><path d="M8.9 11.4h6.2"/><path d="M7.3 15.6h9.4"/><path d="M4.4 20.4h15.2"/></svg></span>
+          <span class="poi-ic s36"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6 17.9 18.6H6.1L12 3.6Z"/><path d="M8.9 11.4h6.2"/><path d="M7.3 15.6h9.4"/><path d="M4.4 20.4h15.2"/></svg></span>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- 4. ПОГОДА -->
+  <section class="p weather" data-ui aria-label="Погода">
+    <p class="w-main"><span class="num">−3,2 °C</span><span class="w-dot">·</span>ветер <span class="num">3,1 м/с</span><span class="w-dot">·</span>без осадков</p>
+    <p class="w-src">Данные на <span class="num">08:00</span> · Open-Meteo · факт</p>
+  </section>
+
+  <!-- 3. ТАЙМЛАЙН + 5. КАРТОЧКА + 6. БЕЙДЖ -->
+  <div class="dock">
+
+    <section class="p timeline" data-ui aria-label="Таймлайн суток">
+      <div class="tl-bar">
+        <span class="tl-cur"><b class="num">08:00</b></span>
+        <button class="tl-now" type="button">Сейчас</button>
+      </div>
+      <div class="tl-scale" role="img" aria-label="Шкала 00–24, маркер на 08:00">
+        <div class="tl-rail"><div class="tl-fill"></div><div class="tl-mark"></div></div>
+        <div class="tl-ticks">
+          <span class="num" style="--i:0">00</span><span class="num" style="--i:3">03</span><span class="num" style="--i:6">06</span><span class="num" style="--i:9">09</span><span class="num" style="--i:12">12</span><span class="num" style="--i:15">15</span><span class="num" style="--i:18">18</span><span class="num" style="--i:21">21</span><span class="num" style="--i:24">24</span>
+        </div>
+      </div>
+    </section>
+
+    <article class="p card" data-ui aria-label="Карточка объекта">
+      <header class="card-h">
+        <span class="card-k"><i class="led is-on"></i>Городские работы</span>
+        <h1 class="card-t">Российская Федерация, город Москва, внутригородская территория муниципальный округ Вороново, село Вороново, дом 51</h1>
+        <p class="card-src">data.mos.ru, набор <span class="num">2855</span> · данные на <span class="num">27.11 19:22</span> МСК</p>
+      </header>
+      <dl class="fields">
+        <div class="f"><dt>Район</dt><dd>район Вороново</dd></div>
+        <div class="f"><dt>Округ</dt><dd>Троицкий административный округ</dd></div>
+        <div class="f"><dt>Срок работ</dt><dd class="num">15.10.2026 — 24.12.2026</dd></div>
+        <div class="f"><dt>Что делают</dt><dd>1. Земляные работы; 2. Установка временных ограждений</dd></div>
+        <div class="f"><dt>Заказчик</dt><dd>КАЗЕННОЕ ПРЕДПРИЯТИЕ "МОСКОВСКАЯ ЭНЕРГЕТИЧЕСКАЯ ДИРЕКЦИЯ"</dd></div>
+      </dl>
+    </article>
+
+    <aside class="p badge" data-ui aria-label="Бейдж источника">
+      <i class="led is-on"></i>
+      <span>Данные на <span class="num">27.11 19:22</span> · data.mos.ru · факты</span>
+    </aside>
+
+  </div>
+</div>
+
+</body>
+</html>
