@@ -1,10 +1,10 @@
-// Service Worker «Карта окружения».
+// Service Worker «Пульс Москвы».
 // Навигации (HTML) и данные (data/*) —
 // network-first: после деплоя пользователь сразу видит новую версию и
 // свежие данные, офлайн — из кэша. Хэшированные чанки —
 // stale-while-revalidate: открываются мгновенно и при сети, и из кэша.
-const CACHE_NAME = "karta-okruzheniya-v13";
-const BASE = "/karta-okruzheniya";
+const CACHE_NAME = "puls-moskvy-v1";
+const BASE = "/puls-moskvy";
 
 // Стабильные файлы, кэшируемые при установке. JS/CSS-чанки hashed —
 // их подхватывает runtime-стратегия ниже.

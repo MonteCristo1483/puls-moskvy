@@ -2,6 +2,7 @@ import type { Theme } from "./theme";
 import { ICON_PATHS, type IconKey } from "./icons";
 
 export type LayerKey =
+  | "weather"
   | "schools"
   | "kindergartens"
   | "parks"
@@ -13,6 +14,7 @@ export type LayerKey =
 export type Visibility = Record<LayerKey, boolean>;
 
 export const DEFAULT_VISIBILITY: Visibility = {
+  weather: true,
   schools: true,
   kindergartens: true,
   parks: true,
@@ -23,6 +25,7 @@ export const DEFAULT_VISIBILITY: Visibility = {
 };
 
 const ITEMS: { key: LayerKey; label: string; icon: IconKey }[] = [
+  { key: "weather", label: "Погода и ветер", icon: "wind" },
   { key: "schools", label: "Школы", icon: "school" },
   { key: "kindergartens", label: "Сады", icon: "kindergarten" },
   { key: "parks", label: "Парки", icon: "park" },

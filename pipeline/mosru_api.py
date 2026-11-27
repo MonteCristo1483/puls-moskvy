@@ -56,7 +56,7 @@ def require_key(key: str | None = None) -> str:
 
 def http_json(url: str, timeout: float = 30.0):
     request = urllib.request.Request(
-        url, headers={"User-Agent": "karta-okruzheniya/1.0"}
+        url, headers={"User-Agent": "puls-moskvy/1.0"}
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:

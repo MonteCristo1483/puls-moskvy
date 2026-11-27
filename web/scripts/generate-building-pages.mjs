@@ -30,7 +30,7 @@ const PUBLIC_DATA = join(WEB_ROOT, "public", "data");
 const LEGACY_DATA_PATH = join(PUBLIC_DATA, "presnya_buildings.geojson");
 const MANIFEST_PATH = join(PUBLIC_DATA, "districts", "manifest.json");
 const DIST_ROOT = join(WEB_ROOT, "dist");
-const BASE = "https://montecristo1483.github.io/karta-okruzheniya";
+const BASE = "https://montecristo1483.github.io/puls-moskvy";
 const OG_IMAGE = `${BASE}/og.jpg`;
 const CONFIG_PATH = fileURLToPath(new URL("../../config/scoring.json", import.meta.url));
 const DATA_DATE = new Date().toISOString().slice(0, 10);
@@ -276,7 +276,7 @@ function pageHtml(props, facts, percentileLine) {
 <meta name="theme-color" content="#6a9d76">
 <meta property="og:locale" content="ru_RU">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Карта окружения">
+<meta property="og:site_name" content="Пульс Москвы">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:url" content="${esc(canonical)}">
@@ -328,7 +328,7 @@ h1{font-size:24px;line-height:1.2;margin:0 0 4px}
 </head>
 <body>
 <div class="wrap">
-  <div class="brand"><span class="logo"></span><span>Карта окружения</span></div>
+  <div class="brand"><span class="logo"></span><span>Пульс Москвы</span></div>
   <main class="card">
     <h1>${esc(address)}</h1>
     ${props.year != null ? `<div class="year">Год постройки — ${esc(props.year)}</div>` : ""}

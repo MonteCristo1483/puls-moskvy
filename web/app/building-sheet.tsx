@@ -124,7 +124,7 @@ function v2Reasons(compact: BuildingBreakdown, year: number | null) {
 }
 
 // Публичный URL статического экспорта на GitHub Pages (basePath из next.config).
-const PUBLIC_BASE = "https://montecristo1483.github.io/karta-okruzheniya";
+const PUBLIC_BASE = "https://montecristo1483.github.io/puls-moskvy";
 
 function formatSigned(value: number): string {
   return `${value > 0 ? "+" : "−"}${Math.abs(value).toFixed(1)}`;

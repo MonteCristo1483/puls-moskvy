@@ -41,6 +41,16 @@ body {
   }
 }
 
+/* Плашка погоды (weather-layer.tsx) на телефоне уступает нижней карточке
+   дома: обе живут у нижнего края экрана. На десктопе карточка справа —
+   конфликта нет, плашка остаётся. */
+@media (max-width: 767px) {
+  html:has([data-sheet="open"]) [data-weather-pill] {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
 /* Фон вместо подложки-тайлов: пастельная диорама / глубокий сине-серый (тёмная) */
 .map-gradient {
   background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-mid) 55%, var(--bg-bottom) 100%);

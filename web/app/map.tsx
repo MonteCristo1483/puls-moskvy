@@ -17,9 +17,10 @@ import { geometryCenter, haversineM, nearestPosition } from "./geo-utils";
 import { ICON_PATHS, type IconKey } from "./icons";
 import { initialTheme, MAP_FOG, THEME_KEY } from "./theme";
 import type { Theme } from "./theme";
+import WeatherLayer from "./weather-layer";
 
 // Пути относительные — статический экспорт живёт в подпапке
-// basePath (/karta-okruzheniya на GitHub Pages).
+// basePath (/puls-moskvy на GitHub Pages).
 const BUILDINGS_URL = "data/buildings.pmtiles";
 const BASEMAP_URL = "data/basemap.pmtiles";
 // Красные зоны, POI и деревья — единые тайлы на всю Москву (z8–16).
@@ -5311,6 +5312,7 @@ export default function Map() {
         theme={theme}
         onThemeToggle={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
       />
+      <WeatherLayer visible={visible.weather} theme={theme} />
       <SearchBox
         items={searchItems}
         onSelect={(id) => selectRef.current?.(id)}
@@ -5392,12 +5394,12 @@ export default function Map() {
             <circle cx="256" cy="256" r="130" fill="none" stroke="#ffffff" strokeWidth="64" />
           </svg>
           <div className="text-lg font-semibold tracking-wide text-white">
-            Карта окружения
+            Пульс Москвы
           </div>
         </div>
       )}
       <div className="pointer-events-none absolute bottom-2 right-3 max-w-md text-right text-[11px] leading-tight text-slate-500 dark:text-slate-400">
-        © OpenStreetMap contributors, ODbL · Индекс окружения — справочная
+        © OpenStreetMap contributors, ODbL · Пульс Москвы — справочная
         информация по открытым данным, не является замером или оценкой стоимости
       </div>
     </div>

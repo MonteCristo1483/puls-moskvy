@@ -1,5 +1,5 @@
 // Временный статик-сервер для локальной проверки GitHub Pages-раскладки
-// (сайт в подпапке /karta-okruzheniya). Имитирует поведение Pages:
+// (сайт в подпапке /puls-moskvy). Имитирует поведение Pages:
 // подпапка → корень ветки gh-pages.
 // Использование: node scripts/serve-test.mjs <корень-где-лежит-подпапка> [порт]
 import { createServer } from "node:http";

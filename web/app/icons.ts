@@ -18,6 +18,7 @@ export const ICON_PATHS = {
   shop: "M6.5 8.5h11l-1 11h-9l-1-11zM9.5 8.5a2.5 2.5 0 0 1 5 0",
   redzones: "M12 4 21 19.5H3L12 4zM12 10v4M12 16.8v.2",
   routes: "M4.5 18.5c3.5-8 11.5-8 15-2.5M16.5 13.5l3 2.5-3.5 1.5",
+  wind: "M3 8.2h10.6a2.4 2.4 0 1 0-2.4-2.4M3 12.2h14.4a2.4 2.4 0 1 1-2.4 2.4M3 16.2h6.6a2.1 2.1 0 1 1-2.1 2.1",
 } as const;
 
 export type IconKey = keyof typeof ICON_PATHS;

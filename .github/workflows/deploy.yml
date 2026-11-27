@@ -218,7 +218,7 @@ jobs:
           else
             path="data/tiles/buildings.pmtiles"
           fi
-          url="https://montecristo1483.github.io/karta-okruzheniya/$path"
+          url="https://montecristo1483.github.io/puls-moskvy/$path"
           for attempt in 1 2 3; do
             code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -r 0-99 "$url" || true)
             echo "attempt $attempt: HTTP $code"
