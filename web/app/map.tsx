@@ -19,6 +19,7 @@ import { initialTheme, MAP_FOG, THEME_KEY } from "./theme";
 import type { Theme } from "./theme";
 import WeatherLayer from "./weather-layer";
 import ShadowsLayer from "./shadows-layer";
+import FactsBadge from "./facts-badge";
 import Timeline, { readTimelineParam, writeTimelineParam } from "./timeline";
 
 // Пути относительные — статический экспорт живёт в подпапке
@@ -5330,6 +5331,7 @@ export default function Map() {
         onThemeToggle={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
       />
       <WeatherLayer visible={visible.weather} theme={theme} minutes={clockMinutes} />
+      <FactsBadge />
       <ShadowsLayer visible={visible.shadows} theme={theme} minutes={clockMinutes} />
       <Timeline minutes={clockMinutes} onChange={changeClockMinutes} />
       <SearchBox
