@@ -21,3 +21,4 @@ web/.pages-test/
 web/test-results/
 web/playwright-report/
 docs/shots/
+web/shots/

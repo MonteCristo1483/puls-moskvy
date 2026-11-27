@@ -50,18 +50,38 @@ test("Погода: плашка показывает данные Open-Meteo, �
   // Атрибуция CC BY 4.0 видна на карте (title плашки), а не только в футере.
   await expect(pill).toHaveAttribute("title", /CC BY 4\.0/);
 
-  // Стрелки ветра — отдельный symbol-слой MapLibre. В headless без WebGL
-  // карты нет; тогда проверяем только плашку.
-  const arrows = await page.evaluate(() => {
-    const map = (
-      window as unknown as {
-        __map?: { getLayer?: (id: string) => unknown };
-      }
-    ).__map;
-    if (!map || typeof map.getLayer !== "function") return "no-map";
-    return map.getLayer("weather-wind-arrows") ? "arrows" : "no-layer";
-  });
-  if (arrows !== "no-map") expect(arrows).toBe("arrows");
+  // Стрелки ветра — отдельный symbol-слой MapLibre. На живой карте он
+  // появляется только после того, как стиль и тайлы готовы (isStyleLoaded),
+  // поэтому ждём опросом — это и есть регрессия на «слой не создался».
+  // Без WebGL/данных карты нет; тогда проверяем только плашку.
+  const hasMap = await page.evaluate(() =>
+    Boolean((window as unknown as { __map?: unknown }).__map),
+  );
+  if (hasMap) {
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const map = (
+              window as unknown as {
+                __map?: {
+                  getLayer: (id: string) => unknown;
+                  queryRenderedFeatures: (options: {
+                    layers: string[];
+                  }) => unknown[];
+                };
+              }
+            ).__map;
+            if (!map || typeof map.getLayer !== "function") return -1;
+            if (!map.getLayer("weather-wind-arrows")) return 0;
+            return map.queryRenderedFeatures({
+              layers: ["weather-wind-arrows"],
+            }).length;
+          }),
+        { timeout: 20_000, message: "стрелки ветра отрисованы на карте" },
+      )
+      .toBeGreaterThan(0);
+  }
 
   expect(pageErrors).toEqual([]);
 });

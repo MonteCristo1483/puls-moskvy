@@ -93,8 +93,8 @@ function makeArrowImage(theme: Theme, tier: number): ImageData | null {
   ctx.scale(ARROW_PIXEL_RATIO, ARROW_PIXEL_RATIO);
   const center = ARROW_BASE_PX / 2;
   // Подложка контрастна и к карте, и к 3D-домам в обеих темах.
-  drawArrow(ctx, center, center, 30, 10.5, TIER_HALO[theme], 8);
-  drawArrow(ctx, center, center, 30, 10.5, TIER_COLORS[theme][tier], 3.2);
+  drawArrow(ctx, center, center, 32, 12, TIER_HALO[theme], 8.5);
+  drawArrow(ctx, center, center, 32, 12, TIER_COLORS[theme][tier], 4.2);
   return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
 
@@ -129,13 +129,13 @@ function arrowLayerSpec(): maplibregl.LayerSpecification {
         ["linear"],
         ["get", "speed"],
         0,
-        0.5,
+        0.62,
         4,
-        0.7,
+        0.8,
         8,
-        0.9,
+        0.98,
         14,
-        1.05,
+        1.15,
       ] as never,
       // Стрелка нарисована на север; метеонаправление — «откуда», поэтому
       // +180°, чтобы остриё показывало, куда дует.
@@ -344,24 +344,33 @@ export default function WeatherLayer({
   // первого symbol-слоя стиля, чтобы подписи POI и улиц остались сверху.
   useEffect(() => {
     if (!visible || !mapReady) return;
-    const map = mapRef.current;
-    if (!map) return;
-    let cancelStyleWait: (() => void) | null = null;
+    const instance = mapRef.current;
+    if (!instance) return;
+    // Сужение типа не переживает замыкания — фиксируем не-null ссылку.
+    const map: maplibregl.Map = instance;
     // Отложенные перерисовки: map.tsx добавляет свои слои после нас.
     const retimers: number[] = [];
+    let retryTimer: number | null = null;
+    let attempts = 0;
 
-    const paint = () => {
-      if (!map.isStyleLoaded()) {
-        if (cancelStyleWait) return;
-        const handler = () => {
-          cancelStyleWait = null;
-          paint();
-        };
-        cancelStyleWait = () => map.off("style.load", handler);
-        map.once("style.load", handler);
-        return;
-      }
+    // isStyleLoaded() остаётся false, пока грузятся тайлы PMTiles, а событие
+    // style.load к этому моменту уже прошло — addLayer в таком состоянии
+    // бросает «Style is not done loading». Поэтому ждём готовности опросом.
+    function scheduleRetry() {
+      if (retryTimer !== null || attempts >= 160) return;
+      attempts += 1;
+      retryTimer = window.setTimeout(() => {
+        retryTimer = null;
+        paint();
+      }, 250);
+    }
+
+    function paint() {
       try {
+        if (!map.isStyleLoaded() && !map.getLayer(LAYER_ID)) {
+          scheduleRetry();
+          return;
+        }
         ensureArrowImages(map, theme);
         const created = !map.getLayer(LAYER_ID);
         if (!map.getSource(SOURCE_ID)) {
@@ -379,23 +388,28 @@ export default function WeatherLayer({
         } catch {
           // Порядок слоёв — косметика; данные стрелок уже записаны.
         }
+        attempts = 0;
         if (created) {
-          // Слои зданий и POI map.tsx добавляет на `load` уже после нас —
-          // через пару секунд возвращаем стрелки на место.
+          // Слои POI и подсветку map.tsx добавляет после нас — через пару
+          // секунд возвращаем стрелки на место.
           for (const delay of [800, 2500]) {
             retimers.push(window.setTimeout(paint, delay));
           }
         }
       } catch {
-        // Стиль перезагружается или карта уже удалена — слой не критичен.
+        // Стиль ещё не готов или карта уже удалена — попробуем позже.
+        scheduleRetry();
       }
-    };
+    }
 
     paint();
     map.on("moveend", paint);
+    // Дублирующий сигнал: load наступает, когда стиль и источники готовы.
+    map.once("load", paint);
     return () => {
       map.off("moveend", paint);
-      cancelStyleWait?.();
+      map.off("load", paint);
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
       for (const timer of retimers) window.clearTimeout(timer);
       retimers.length = 0;
       try {
