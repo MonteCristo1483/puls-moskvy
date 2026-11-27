@@ -19,6 +19,7 @@ import { initialTheme, MAP_FOG, THEME_KEY } from "./theme";
 import type { Theme } from "./theme";
 import WeatherLayer from "./weather-layer";
 import ShadowsLayer from "./shadows-layer";
+import Timeline, { readTimelineParam, writeTimelineParam } from "./timeline";
 
 // Пути относительные — статический экспорт живёт в подпапке
 // basePath (/puls-moskvy на GitHub Pages).
@@ -2447,6 +2448,10 @@ export default function Map() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<SelectedBuilding | null>(null);
   const [visible, setVisible] = useState<Visibility>(DEFAULT_VISIBILITY);
+  // S4: выбранный час таймлайна (минуты от полуночи, МСК) или null — «сейчас».
+  // Живёт в URL (`?t=HH:MM`); состояние начального рендера — живой режим,
+  // параметр читаем в эффекте ниже (на сервере window нет).
+  const [clockMinutes, setClockMinutes] = useState<number | null>(null);
   const [searchItems, setSearchItems] = useState<SearchItem[]>([]);
   const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -2495,6 +2500,17 @@ export default function Map() {
   const updateSelected = (b: SelectedBuilding | null) => {
     selectedRef.current = b;
     setSelected(b);
+  };
+
+  // S4: состояние таймлайна — только URL (`?t=HH:MM`). Читаем при загрузке,
+  // пишем через history.replaceState: без перезагрузки и без сервера.
+  useEffect(() => {
+    setClockMinutes(readTimelineParam(window.location.search));
+  }, []);
+
+  const changeClockMinutes = (next: number | null) => {
+    setClockMinutes(next);
+    writeTimelineParam(next);
   };
 
   const showNotice = (message: string) => {
@@ -5313,8 +5329,9 @@ export default function Map() {
         theme={theme}
         onThemeToggle={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
       />
-      <WeatherLayer visible={visible.weather} theme={theme} />
-      <ShadowsLayer visible={visible.shadows} theme={theme} />
+      <WeatherLayer visible={visible.weather} theme={theme} minutes={clockMinutes} />
+      <ShadowsLayer visible={visible.shadows} theme={theme} minutes={clockMinutes} />
+      <Timeline minutes={clockMinutes} onChange={changeClockMinutes} />
       <SearchBox
         items={searchItems}
         onSelect={(id) => selectRef.current?.(id)}

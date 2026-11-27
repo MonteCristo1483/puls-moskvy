@@ -4,6 +4,11 @@
 // (ADR-001), стрелки — GeoJSON symbol-слой MapLibre с иконкой из canvas,
 // плашка времени и источника. Всё живёт в одном компоненте, map.tsx только
 // вставляет его в разметку; карту берём из window.__map (её создаёт map.tsx).
+//
+// S4: если в URL выбран час (`?t=HH:MM`), стрелки и плашка берут значения
+// этого часа из того же часового ряда, что пришёл с «текущей» погодой —
+// второго запроса нет. Плашка честно пишет «факт» (час уже прошёл) или
+// «прогноз».
 import { useEffect, useRef, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import type { Feature, FeatureCollection, Point } from "geojson";
@@ -13,9 +18,13 @@ import {
   looksOffline,
   WEATHER_MOVE_THRESHOLD_DEG,
   WEATHER_REFRESH_MS,
+  weatherAt,
   weatherClock,
+  weatherKind,
   type WeatherSnapshot,
+  type WeatherValues,
 } from "./live-weather";
+import { moscowClockMinutes } from "./solar";
 
 const SOURCE_ID = "weather-wind";
 const LAYER_ID = "weather-wind-arrows";
@@ -185,7 +194,7 @@ function gridLayout(width: number, height: number): GridLayout {
 
 function windFeatures(
   map: maplibregl.Map,
-  snapshot: WeatherSnapshot,
+  values: WeatherValues,
   theme: Theme,
 ): Array<Feature<Point, WindProps>> {
   const container = map.getContainer();
@@ -194,8 +203,8 @@ function windFeatures(
   if (width < 80 || height < 80) return [];
 
   const layout = gridLayout(width, height);
-  const icon = imageName(theme, tierForSpeed(snapshot.windSpeedMs));
-  const rotate = (snapshot.windDirectionDeg + 180) % 360;
+  const icon = imageName(theme, tierForSpeed(values.windSpeedMs));
+  const rotate = (values.windDirectionDeg + 180) % 360;
   const features: Array<Feature<Point, WindProps>> = [];
   for (let row = 0; row < layout.rows; row += 1) {
     for (let col = 0; col < layout.cols; col += 1) {
@@ -204,7 +213,7 @@ function windFeatures(
       const point = map.unproject([x, y]);
       features.push({
         type: "Feature",
-        properties: { icon, rotate, speed: snapshot.windSpeedMs },
+        properties: { icon, rotate, speed: values.windSpeedMs },
         geometry: { type: "Point", coordinates: [point.lng, point.lat] },
       });
     }
@@ -214,14 +223,14 @@ function windFeatures(
 
 function writeFeatures(
   map: maplibregl.Map,
-  snapshot: WeatherSnapshot | null,
+  values: WeatherValues | null,
   theme: Theme,
 ) {
   const source = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
   if (!source) return;
   const collection: FeatureCollection<Point, WindProps> = {
     type: "FeatureCollection",
-    features: snapshot ? windFeatures(map, snapshot, theme) : [],
+    features: values ? windFeatures(map, values, theme) : [],
   };
   source.setData(collection as never);
 }
@@ -252,17 +261,26 @@ function formatNumber(value: number): string {
 export default function WeatherLayer({
   visible,
   theme,
+  minutes,
 }: {
   visible: boolean;
   theme: Theme;
+  /** Выбранный час таймлайна, минуты от полуночи; null — живой режим. */
+  minutes: number | null;
 }) {
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const snapshotRef = useRef<WeatherSnapshot | null>(null);
+  // Значения на выбранное время: час из ряда или текущая погода. Отдельная
+  // ссылка нужна эффекту слоя — он перерисовывает стрелки при смене часа.
+  const valuesRef = useRef<WeatherValues | null>(null);
   const lastCenterRef = useRef<[number, number] | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [snapshot, setSnapshot] = useState<WeatherSnapshot | null>(null);
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
+
+  const hour = minutes === null ? null : weatherAt(snapshot, minutes);
+  const values: WeatherValues | null = hour ?? snapshot;
+  valuesRef.current = values;
 
   // Эффекты детей выполняются раньше эффекта родителя, поэтому карту не
   // «ждём по порядку», а ищем в window.__map (map.tsx выставляет её сразу
@@ -316,7 +334,6 @@ export default function WeatherLayer({
       })
         .then((data) => {
           if (controller.signal.aborted) return;
-          snapshotRef.current = data;
           setSnapshot(data);
           setStatus("ok");
         })
@@ -382,7 +399,7 @@ export default function WeatherLayer({
         if (created) {
           map.addLayer(arrowLayerSpec() as never, symbolLayerId(map));
         }
-        writeFeatures(map, snapshotRef.current, theme);
+        writeFeatures(map, valuesRef.current, theme);
         try {
           ensureArrowOrder(map);
         } catch {
@@ -419,25 +436,35 @@ export default function WeatherLayer({
         // Карта уже удалена вместе со стилем.
       }
     };
-  }, [visible, theme, mapReady, snapshot]);
+  }, [visible, theme, mapReady, snapshot, minutes]);
 
   if (!visible) return null;
 
   const stale = status === "error";
-  const clock = snapshot ? weatherClock(snapshot.time) : null;
-  const valueLine = snapshot
-    ? `${snapshot.temperatureC > 0 ? "+" : ""}${formatNumber(
-        snapshot.temperatureC,
-      )} °C · ветер ${formatNumber(snapshot.windSpeedMs)} м/с${
-        snapshot.precipitationMm >= 0.05
-          ? ` · ${formatNumber(snapshot.precipitationMm)} мм`
+  const clock = hour
+    ? weatherClock(hour.time)
+    : snapshot
+      ? weatherClock(snapshot.time)
+      : null;
+  // «Факт» / «прогноз» только для выбранного часа: у текущей погоды время
+  // и так фактическое.
+  const kind =
+    hour !== null && minutes !== null
+      ? weatherKind(minutes, Math.floor(moscowClockMinutes(Date.now())))
+      : null;
+  const valueLine = values
+    ? `${values.temperatureC > 0 ? "+" : ""}${formatNumber(
+        values.temperatureC,
+      )} °C · ветер ${formatNumber(values.windSpeedMs)} м/с${
+        values.precipitationMm >= 0.05
+          ? ` · ${formatNumber(values.precipitationMm)} мм`
           : ""
       }`
     : status === "loading"
       ? "Погода · загрузка…"
       : "Погода недоступна";
-  const sourceLine = snapshot
-    ? `Данные на ${clock} · Open-Meteo${
+  const sourceLine = values
+    ? `Данные на ${clock} · Open-Meteo${kind ? ` · ${kind}` : ""}${
         stale ? (looksOffline() ? " · нет сети" : " · данные устарели") : ""
       }`
     : status === "loading"
@@ -448,9 +475,13 @@ export default function WeatherLayer({
     <div
       data-weather-pill="1"
       data-weather-status={status}
-      data-weather-temp={snapshot ? snapshot.temperatureC.toFixed(2) : undefined}
-      data-weather-wind={snapshot ? snapshot.windSpeedMs.toFixed(2) : undefined}
-      data-weather-time={snapshot ? snapshot.time : undefined}
+      data-weather-temp={values ? values.temperatureC.toFixed(2) : undefined}
+      data-weather-wind={values ? values.windSpeedMs.toFixed(2) : undefined}
+      data-weather-time={
+        hour ? hour.time : snapshot ? snapshot.time : undefined
+      }
+      data-weather-clock={clock ?? undefined}
+      data-weather-kind={kind ?? undefined}
       role="status"
       title="Погода и ветер: Open-Meteo, данные CC BY 4.0. Стрелки показывают, куда дует ветер; обновление раз в 15 минут."
       className="absolute bottom-2 left-3 z-20 flex select-none flex-col items-start gap-0.5 rounded-2xl bg-white/85 px-2.5 py-1.5 text-slate-700 shadow-sm backdrop-blur transition-colors dark:bg-slate-900/80 dark:text-slate-200"

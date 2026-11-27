@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 // Скриншоты и замер кадров карты в заданном DPR.
 // Использование:
-//   node scripts/shot.mjs <имя.png> <dpr> <ширина> <высота> [--perf] [--headless]
+//   node scripts/shot.mjs <имя.png> <dpr> <ширина> <высота> [--perf] [--headless] [--t=HH:MM] [--dark]
 // Примеры:
 //   node scripts/shot.mjs shots/before-1290-dpr1.png 1 1290 900 --perf
 //   node scripts/shot.mjs shots/before-1290-dpr2.png 2 1290 900
+//   node scripts/shot.mjs shots/s4-morning.png 1 1280 800 --headless --t=08:00
+//   node scripts/shot.mjs shots/s4-dark.png 1 1280 800 --headless --dark
 //
 // Готовит Pages-раскладку (dist → .shot/puls-moskvy), поднимает
-// статик-сервер, снимает скриншот. С --perf сначала меряет простой,
+// статик-сервер, снимает скриншот. `--t=HH:MM` открывает карту на выбранном
+// часе таймлайна (S4), `--dark` — в тёмной теме. С --perf сначала меряет простой,
 // затем 200 кадров при непрерывном зуме колесом (1.5× и обратно),
 // печатает медиану, p95 и число кадров >33 мс.
 import { spawn } from "node:child_process";
@@ -25,7 +28,7 @@ const BASE_URL = `http://127.0.0.1:${PORT}/puls-moskvy/`;
 
 const [outArg, dprArg, widthArg, heightArg, ...flags] = process.argv.slice(2);
 if (!outArg || !dprArg || !widthArg || !heightArg) {
-  console.error("usage: node scripts/shot.mjs <out.png> <dpr> <width> <height> [--perf] [--headless]");
+  console.error("usage: node scripts/shot.mjs <out.png> <dpr> <width> <height> [--perf] [--headless] [--t=HH:MM] [--dark]");
   process.exit(1);
 }
 const out = resolve(WEB_ROOT, outArg);
@@ -34,6 +37,11 @@ const width = Number(widthArg);
 const height = Number(heightArg);
 const perf = flags.includes("--perf");
 const headless = flags.includes("--headless");
+const dark = flags.includes("--dark");
+// S4: `--t=08:00` — снимок не «сейчас», а на выбранном часе таймлайна.
+const clockFlag = flags.find((flag) => flag.startsWith("--t="));
+const clock = clockFlag ? clockFlag.slice("--t=".length) : null;
+const targetUrl = clock ? `${BASE_URL}?t=${encodeURIComponent(clock)}` : BASE_URL;
 
 async function waitForServer() {
   const deadline = Date.now() + 20_000;
@@ -74,10 +82,28 @@ try {
     viewport: { width, height },
     deviceScaleFactor: dpr,
   });
+  if (dark) {
+    // Тема читается антфлеш-скриптом layout.tsx из localStorage.
+    await context.addInitScript(() => {
+      window.localStorage.setItem("karta-theme", "dark");
+    });
+  }
   const page = await context.newPage();
-  await page.goto(BASE_URL, { waitUntil: "networkidle" });
+  await page.goto(targetUrl, { waitUntil: "networkidle" });
   await page.waitForSelector("canvas.maplibregl-canvas", { timeout: 20_000 });
   await page.waitForTimeout(5_000);
+  if (clock) {
+    console.log(`url: ${targetUrl}`);
+    const shown = await page.evaluate(() => {
+      const slider = document.querySelector("[data-timeline-slider]");
+      const pill = document.querySelector("[data-weather-pill]");
+      return {
+        timeline: slider?.getAttribute("aria-valuetext") ?? null,
+        pill: pill?.textContent?.replace(/\s+/g, " ").trim() ?? null,
+      };
+    });
+    console.log(`таймлайн: ${shown.timeline} · плашка: ${shown.pill}`);
+  }
 
   if (perf) {
     const attrs = await page.evaluate(() => {
