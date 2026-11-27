@@ -1,5 +1,7 @@
 import type { Theme } from "./theme";
 import { ICON_PATHS, type IconKey } from "./icons";
+import { Chip } from "./design";
+import { LAYERS } from "./layers/registry";
 
 export type LayerKey =
   | "weather"
@@ -14,10 +16,8 @@ export type LayerKey =
 
 export type Visibility = Record<LayerKey, boolean>;
 
-export const DEFAULT_VISIBILITY: Visibility = {
-  weather: true,
-  // Тени — тяжёлый слой (пересчёт по кадру), поэтому по умолчанию выключен.
-  shadows: false,
+/** «Включён по умолчанию» для чипов, чей слой живёт в движке карты. */
+const ENGINE_DEFAULTS = {
   schools: true,
   kindergartens: true,
   parks: true,
@@ -25,6 +25,20 @@ export const DEFAULT_VISIBILITY: Visibility = {
   shops: false,
   redzones: true,
   routes: false,
+} as const;
+
+/** Состояние чипа по умолчанию объявляет сам слой (`defaultVisible`). */
+function layerDefault(key: LayerKey): boolean {
+  const layer = LAYERS.find((item) => item.visibilityKey === key);
+  if (!layer) throw new Error(`чип «${key}» не привязан к слою в реестре`);
+  return layer.defaultVisible;
+}
+
+export const DEFAULT_VISIBILITY: Visibility = {
+  ...ENGINE_DEFAULTS,
+  weather: layerDefault("weather"),
+  // Тени — тяжёлый слой (пересчёт по кадру), поэтому по умолчанию выключен.
+  shadows: layerDefault("shadows"),
 };
 
 const ITEMS: { key: LayerKey; label: string; icon: IconKey }[] = [
@@ -50,7 +64,7 @@ function LayerIcon({ d }: { d: string }) {
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="shrink-0 text-slate-400 dark:text-slate-500"
+      className="shrink-0 text-icon"
       aria-hidden
     >
       <path d={d} />
@@ -75,20 +89,6 @@ function MoonIcon() {
   );
 }
 
-function CheckIcon() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
-      <path
-        d="M2 6.3 4.7 9 10 3.2"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 export default function LayersPanel({
   visibility,
   onToggle,
@@ -107,43 +107,21 @@ export default function LayersPanel({
         onClick={onThemeToggle}
         aria-label="Переключить тему"
         title={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-white/85 text-slate-600 shadow-sm backdrop-blur transition-colors hover:bg-white dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800"
+        className="flex h-8 w-8 items-center justify-center rounded-pill bg-panel text-ink-quiet shadow-plate backdrop-blur transition-colors hover:bg-soft"
       >
         {theme === "dark" ? <SunIcon /> : <MoonIcon />}
       </button>
       <div className="flex flex-col items-start gap-1.5">
-        {ITEMS.map(({ key, label, icon }) => {
-          const active = visibility[key];
-          return (
-            <label
-              key={key}
-              className={`flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium shadow-sm backdrop-blur transition-colors md:px-3 md:py-1.5 md:text-[13px] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-emerald-500/60 has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-transparent ${
-                active
-                  ? "bg-white/85 text-slate-700 dark:bg-slate-900/80 dark:text-slate-200"
-                  : "bg-white/55 text-slate-500 dark:bg-slate-900/70 dark:text-slate-300"
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={active}
-                onChange={() => onToggle(key)}
-                className="peer sr-only"
-              />
-              <span
-                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-white transition-colors peer-checked:border-emerald-500 peer-checked:bg-emerald-500 ${
-                  active
-                    ? "border-emerald-500 bg-emerald-500"
-                    : "border-slate-300 bg-white/60 text-transparent dark:border-slate-500 dark:bg-slate-800/80"
-                }`}
-                aria-hidden
-              >
-                <CheckIcon />
-              </span>
-              <LayerIcon d={ICON_PATHS[icon]} />
-              <span>{label}</span>
-            </label>
-          );
-        })}
+        {ITEMS.map(({ key, label, icon }) => (
+          <Chip
+            key={key}
+            checked={visibility[key]}
+            onToggle={() => onToggle(key)}
+          >
+            <LayerIcon d={ICON_PATHS[icon]} />
+            <span>{label}</span>
+          </Chip>
+        ))}
       </div>
     </div>
   );

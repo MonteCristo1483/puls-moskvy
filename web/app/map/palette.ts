@@ -190,3 +190,48 @@ export function mixHex(a: string, b: string, t: number): string {
       .padStart(2, "0");
   return `#${mix(ar, br)}${mix(ag, bg)}${mix(ab, bb)}`;
 }
+
+// ── Цвета слоёв поверх карты (WebGL/canvas, не DOM): держим рядом с
+// палитрами тем, чтобы новые слои не заводили hex в компонентах. ─────────
+
+/** Стрелки ветра: ступени скорости — тихо, слабый, заметный, сильный. */
+export const WIND_TIER_COLORS: Record<
+  Theme,
+  readonly [string, string, string, string]
+> = {
+  light: ["#64748b", "#0f766e", "#b45309", "#be123c"],
+  dark: ["#a3b3c7", "#5eead4", "#fcd34d", "#fb7185"],
+};
+
+/** Подложка стрелки ветра: контрастна и карте, и 3D-домам в обеих темах. */
+export const WIND_TIER_HALO: Record<Theme, string> = {
+  light: "rgba(255,255,255,0.92)",
+  dark: "rgba(6,12,20,0.8)",
+};
+
+/**
+ * Тени кадра растворены в один MultiPolygon, поэтому альфа не складывается
+ * на перекрытиях: 0.19 в светлой теме — ровная «тень на земле», подложка
+ * остаётся читаемой; в тёмной нужен чуть больший контраст.
+ */
+export const SHADOW_PAINT: Record<Theme, { color: string; opacity: number }> = {
+  light: { color: "#0f172a", opacity: 0.19 },
+  dark: { color: "#000000", opacity: 0.32 },
+};
+
+/** Стрелки пыли над стройками: ядро и ореол иконки. */
+export const DUST_COLORS: Record<Theme, { core: string; halo: string }> = {
+  light: { core: "#b45309", halo: "rgba(255,255,255,0.9)" },
+  dark: { core: "#fbbf24", halo: "rgba(6,12,20,0.8)" },
+};
+
+/**
+ * Кольцо балла в карточке дома: цвет — презентация данных, не тема, поэтому
+ * живёт в палитре, а не в токенах интерфейса.
+ */
+export const SCORE_COLORS = {
+  none: "#c9ced3",
+  vlow: "#d98f86",
+  mid: "#c9bf9e",
+  ok: "#7fb069",
+} as const;

@@ -13,6 +13,7 @@
 // отдаёт их родителю (map.tsx), а тот передаёт их слоям.
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
+import { Panel } from "./design";
 import { formatClock, moscowClockMinutes, parseClockParam } from "./solar";
 
 const MINUTES_PER_HOUR = 60;
@@ -174,21 +175,21 @@ export function Timeline({
   };
 
   const focusRing =
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent";
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent";
 
   return (
-    <div
+    <Panel
       data-timeline="1"
       data-timeline-mode={live ? "live" : "fixed"}
       data-timeline-value={formatClock(currentMinutes)}
       title="Время на карте: погода, ветер и тени считаются на выбранный час. Ссылка сохраняет выбор (?t=ЧЧ:ММ)."
-      className="absolute bottom-[7.2rem] left-3 right-3 z-[9] flex select-none flex-col gap-1.5 rounded-2xl bg-white/85 px-2.5 py-2 text-slate-700 shadow-sm backdrop-blur transition-colors md:bottom-[3.2rem] md:left-1/2 md:right-auto md:w-[min(58vw,560px)] md:-translate-x-1/2 dark:bg-slate-900/80 dark:text-slate-200"
+      className="absolute bottom-[7.2rem] left-3 right-3 z-[9] flex select-none flex-col gap-1.5 md:bottom-[3.2rem] md:left-1/2 md:right-auto md:w-[min(58vw,560px)] md:-translate-x-1/2"
     >
       <div className="flex items-center justify-between gap-2">
         <span
           data-timeline-label="1"
-          className={`text-[12px] font-semibold leading-none md:text-[13px] ${
-            live ? "text-slate-700 dark:text-slate-200" : "text-emerald-700 dark:text-emerald-400"
+          className={`text-12 font-semibold leading-none md:text-13 ${
+            live ? "text-ink" : "text-accent-ink"
           }`}
         >
           {modeLabel}
@@ -198,10 +199,10 @@ export function Timeline({
           onClick={() => onChange(null)}
           aria-pressed={live}
           title="Вернуться к текущему времени"
-          className={`rounded-full px-2 py-0.5 text-[11px] font-medium leading-none shadow-sm transition-colors ${focusRing} ${
+          className={`rounded-pill px-2 py-0.5 text-11 font-medium leading-none shadow-plate transition-colors ${focusRing} ${
             live
-              ? "bg-emerald-500 text-white"
-              : "bg-white/70 text-slate-500 hover:text-slate-700 dark:bg-slate-800/70 dark:text-slate-300 dark:hover:text-slate-100"
+              ? "bg-accent text-accent-contrast"
+              : "bg-panel-soft text-ink-idle hover:text-ink-hover"
           }`}
         >
           Сейчас
@@ -223,12 +224,12 @@ export function Timeline({
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         onKeyDown={onKeyDown}
-        className={`relative cursor-pointer touch-none rounded-full px-1 pt-1.5 pb-0.5 ${focusRing}`}
+        className={`relative cursor-pointer touch-none rounded-pill px-1 pt-1.5 pb-0.5 ${focusRing}`}
       >
-        <div className="relative h-1.5 rounded-full bg-slate-200 dark:bg-slate-700">
+        <div className="relative h-1.5 rounded-pill bg-track">
           <div
             aria-hidden
-            className="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+            className="absolute inset-y-0 left-0 rounded-pill bg-accent"
             style={{ width: `${percent(currentMinutes)}%` }}
           />
           {Array.from({ length: HOURS_PER_DAY }, (_, hour) => hour).map((hour) => (
@@ -236,16 +237,14 @@ export function Timeline({
               key={hour}
               aria-hidden
               className={`absolute top-full w-px ${
-                hour % 3 === 0
-                  ? "h-2 bg-slate-400 dark:bg-slate-500"
-                  : "h-1 bg-slate-300 dark:bg-slate-600"
+                hour % 3 === 0 ? "h-2 bg-tick" : "h-1 bg-tick-quiet"
               }`}
               style={{ left: `${percent(hour * MINUTES_PER_HOUR)}%` }}
             />
           ))}
           <span
             aria-hidden
-            className="absolute -top-[5px] h-4 w-4 -translate-x-1/2 rounded-full border-2 border-white bg-emerald-500 shadow dark:border-slate-900"
+            className="absolute -top-[5px] h-4 w-4 -translate-x-1/2 rounded-pill border-2 border-thumb-ring bg-accent shadow"
             style={{ left: `${percent(currentMinutes)}%` }}
           />
         </div>
@@ -253,7 +252,7 @@ export function Timeline({
           {LABELED_HOURS.map((hour) => (
             <span
               key={hour}
-              className={`absolute top-0 text-[9px] leading-none text-slate-500 dark:text-slate-400 ${
+              className={`absolute top-0 text-9 leading-none text-ink-2 ${
                 hour === 0 ? "" : "-translate-x-1/2"
               }`}
               style={{ left: `${percent(hour * MINUTES_PER_HOUR)}%` }}
@@ -261,12 +260,12 @@ export function Timeline({
               {hour < 10 ? `0${hour}` : String(hour)}
             </span>
           ))}
-          <span className="absolute right-0 top-0 -translate-x-0 text-[9px] leading-none text-slate-400 dark:text-slate-500">
+          <span className="absolute right-0 top-0 -translate-x-0 text-9 leading-none text-ink-3">
             24
           </span>
         </div>
       </div>
-    </div>
+    </Panel>
   );
 }
 

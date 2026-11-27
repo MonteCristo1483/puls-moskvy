@@ -1,18 +1,7 @@
 @import "tailwindcss";
+@import "./design/tokens.css";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
-
-:root {
-  --bg-top: #f7f2e8;
-  --bg-mid: #e9eff5;
-  --bg-bottom: #d9e6f0;
-}
-
-[data-theme="dark"] {
-  --bg-top: #1b222c;
-  --bg-mid: #232b37;
-  --bg-bottom: #2a3441;
-}
 
 html,
 body {
@@ -51,7 +40,8 @@ body {
   }
 }
 
-/* Фон вместо подложки-тайлов: пастельная диорама / глубокий сине-серый (тёмная) */
+/* Фон вместо подложки-тайлов: пастельная диорама / глубокий сине-серый (тёмная).
+   Цвета — токены --bg-* из design/tokens.css. */
 .map-gradient {
   background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-mid) 55%, var(--bg-bottom) 100%);
 }
@@ -66,9 +56,9 @@ body {
   height: 96px;
   background: linear-gradient(
     180deg,
-    rgba(227, 235, 244, 0.32) 0%,
-    rgba(227, 235, 244, 0.14) 45%,
-    rgba(227, 235, 244, 0) 100%
+    var(--c-haze-top) 0%,
+    var(--c-haze-mid) 45%,
+    var(--c-haze-end) 100%
   );
 }
 
@@ -86,15 +76,15 @@ body {
   z-index: 1;
   background: radial-gradient(
     ellipse 78% 74% at 50% 48%,
-    rgba(18, 32, 48, 0) 58%,
-    rgba(18, 32, 48, 0.14) 100%
+    var(--c-vignette-mid) 58%,
+    var(--c-vignette-edge) 100%
   );
 }
 
 [data-theme="dark"] .map-vignette {
   background: radial-gradient(
     ellipse 78% 74% at 50% 48%,
-    rgba(4, 8, 16, 0) 54%,
-    rgba(4, 8, 16, 0.28) 100%
+    var(--c-vignette-mid) 54%,
+    var(--c-vignette-edge) 100%
   );
 }
