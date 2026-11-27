@@ -73,7 +73,10 @@
       <section class="panel" id="layersPanel" aria-label="Слои карты" data-chrome>
         <div class="panel-head">
           <span class="panel-title">Слои карты</span>
-          <button class="panel-close" type="button" id="panelClose" aria-label="Свернуть слои">×</button>
+          <div class="panel-tools">
+            <button class="panel-reset" type="button" id="panelReset">Сбросить</button>
+            <button class="panel-close" type="button" id="panelClose" aria-label="Свернуть слои">×</button>
+          </div>
         </div>
         <div class="cats" role="group" aria-label="Категории слоёв">
           <button class="cat" type="button" data-cat="transport" aria-pressed="false">
@@ -85,14 +88,13 @@
           <button class="cat" type="button" data-cat="infra" aria-pressed="false">
             <i class="cat-dot" aria-hidden="true"></i>Инфраструктура
           </button>
-          <button class="cat" type="button" data-cat="works" aria-pressed="false">
-            <i class="cat-dot" aria-hidden="true"></i>Городские работы
-            <span class="cat-count" aria-label="1 объект">1</span>
-          </button>
           <button class="cat" type="button" data-cat="air" aria-pressed="false">
             <i class="cat-dot" aria-hidden="true"></i>Атмосфера
           </button>
-          <button class="cat cat-reset" type="button" data-cat="reset">Сбросить</button>
+          <button class="cat cat-wide" type="button" data-cat="works" aria-pressed="false">
+            <i class="cat-dot" aria-hidden="true"></i>Городские работы
+            <span class="cat-count" aria-label="1 объект">1</span>
+          </button>
         </div>
         <div class="tray" id="tray" aria-live="polite"></div>
       </section>
@@ -148,7 +150,7 @@
           tray.append(hint);
           return;
         }
-        for (const [label, on] of cat.switches) {
+        cat.switches.forEach(([label, on], index) => {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "switch";
@@ -160,10 +162,11 @@
           btn.querySelector(".switch-label").textContent = label;
           btn.addEventListener("click", () => {
             const next = btn.getAttribute("aria-checked") !== "true";
+            cat.switches[index][1] = next;
             btn.setAttribute("aria-checked", String(next));
           });
           tray.append(btn);
-        }
+        });
       }
 
       function selectCat(catId) {
@@ -190,11 +193,18 @@
           history.replaceState(null, "", u);
         }
         if (s === "2") selectCat(openCat);
+        if (opts.focus) {
+          const target = s === "3" ? document.getElementById("sheetClose")
+            : s === "2" ? document.getElementById("panelClose")
+            : pill;
+          target.focus({ preventScroll: true });
+        }
       }
 
-      document.getElementById("layersBtn").addEventListener("click", () => setState("2"));
-      document.getElementById("panelClose").addEventListener("click", () => setState("1"));
-      document.getElementById("sheetClose").addEventListener("click", () => setState("2"));
+      document.getElementById("layersBtn").addEventListener("click", () => setState("2", { focus: true }));
+      document.getElementById("panelClose").addEventListener("click", () => setState("1", { focus: true }));
+      document.getElementById("panelReset").addEventListener("click", () => selectCat(null));
+      document.getElementById("sheetClose").addEventListener("click", () => setState("2", { focus: true }));
       document.getElementById("nowBtn").addEventListener("click", () => {
         /* проба: время фиксированное, кнопка только показывает зону нажатия */
       });
@@ -203,9 +213,7 @@
         chip.addEventListener("click", () => {
           if (chip.dataset.cat === "works") {
             selectCat("works");
-            setState("3");
-          } else if (chip.dataset.cat === "reset") {
-            selectCat(null);
+            setState("3", { focus: true });
           } else {
             selectCat(chip.dataset.cat);
           }
@@ -214,8 +222,8 @@
 
       document.addEventListener("keydown", (e) => {
         if (e.key !== "Escape") return;
-        if (current === "3") setState("2");
-        else if (current === "2") setState("1");
+        if (current === "3") setState("2", { focus: true });
+        else if (current === "2") setState("1", { focus: true });
       });
 
       const mode = qs("m", ["day", "eve"], "day");
