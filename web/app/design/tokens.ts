@@ -34,6 +34,7 @@ export const color = {
   accent: "var(--c-accent)",
   accentInk: "var(--c-accent-ink)",
   accentContrast: "var(--c-accent-contrast)",
+  checkOffInk: "var(--c-check-off-ink)",
   warn: "var(--c-warn)",
   warnBg: "var(--c-warn-bg)",
   warnBgStrong: "var(--c-warn-bg-strong)",

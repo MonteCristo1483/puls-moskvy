@@ -37,6 +37,10 @@
   --c-accent: oklch(69.6% 0.17 162.48); /* emerald-500 */
   --c-accent-ink: oklch(50.8% 0.118 165.612); /* emerald-700 */
   --c-accent-contrast: oklch(100% 0 0); /* white */
+  /* Галочка в выключенном чипе: белая и «призрачная» на светлой подложке —
+     так она выглядела до F2 (белый currentColor кружка). В тёмной теме та же
+     белая: кружок темнее подложки, галочка читается как едва заметная. */
+  --c-check-off-ink: oklch(100% 0 0); /* white */
   /* Предупреждение (плашки-уведомления) */
   --c-warn: oklch(55.5% 0.163 48.998); /* amber-700 */
   --c-warn-bg: oklch(98.7% 0.022 95.277); /* amber-50 */
@@ -181,6 +185,7 @@
   --color-accent: var(--c-accent);
   --color-accent-ink: var(--c-accent-ink);
   --color-accent-contrast: var(--c-accent-contrast);
+  --color-check-off-ink: var(--c-check-off-ink);
   --color-warn: var(--c-warn);
   --color-warn-bg: var(--c-warn-bg);
   --color-warn-bg-strong: var(--c-warn-bg-strong);

@@ -26,6 +26,11 @@ type ChipProps = Omit<ComponentPropsWithoutRef<"label">, "onChange"> & {
  * имя работают штатно, ничего не прячем от браузера и тестов. Внешний вид
  * зависит только от `checked`; содержимое (иконка, подпись) задаёт
  * потребитель, `aria-*`/`data-*` на `<label>` пробрасываются.
+ *
+ * В выключенном состоянии галочка остаётся видимой, но приглушённой
+ * (`text-check-off-ink` на подложке `bg-check-off`) — это паритет с видом до
+ * F2, а не случайность порядка классов: раньше белый и прозрачный цвет
+ * конкурировали, побеждал белый. Не убирать без решения по дизайну.
  */
 export default function Chip({
   checked,
@@ -51,7 +56,7 @@ export default function Chip({
         className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-pill border transition-colors ${
           checked
             ? "border-accent bg-accent text-accent-contrast"
-            : "border-border bg-check-off text-transparent"
+            : "border-border bg-check-off text-check-off-ink"
         }`}
         aria-hidden
       >
