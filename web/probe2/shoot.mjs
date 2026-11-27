@@ -75,10 +75,10 @@ const WHITE = hex("#ffffff");
 
 const BUBBLE_DAY = over(WHITE, 0.82, MAP_DAY);
 const BUBBLE_EVE = over(hex("#fff9f3"), 0.88, FLOOR_EVE);
-const MUTED_DAY = over(INK_DAY, 0.8, SURF_DAY);
-const MUTED_EVE = over(INK_EVE, 0.8, SURF_EVE);
-const MUTED_BUB_DAY = over(INK_DAY, 0.8, BUBBLE_DAY);
-const MUTED_BUB_EVE = over(INK_EVE, 0.8, BUBBLE_EVE);
+const MUTED_DAY = over(INK_DAY, 0.84, SURF_DAY);
+const MUTED_EVE = over(INK_EVE, 0.84, SURF_EVE);
+const MUTED_BUB_DAY = over(INK_DAY, 0.84, BUBBLE_DAY);
+const MUTED_BUB_EVE = over(INK_EVE, 0.84, BUBBLE_EVE);
 
 const PAIRS = {
   day: {
@@ -182,6 +182,7 @@ const { server, base } = await serve(PROBE);
 const browser = await chromium.launch();
 const results = [];
 const errors = [];
+let videoOut = null;
 
 try {
   const shots = [
@@ -205,16 +206,15 @@ try {
     });
     await page.goto(base + shot.url, { waitUntil: "load" });
     await page.evaluate(() => document.fonts.ready);
-    await page.waitForTimeout(320);
+    await page.waitForTimeout(450);
     const out = path.join(SHOTS, shot.file);
-    await page.screenshot({ path: out });
+    await page.screenshot({ path: out, animations: "disabled" });
     const m = await page.evaluate(MEASURE);
     results.push({ file: shot.file, out: path.relative(WEB, out).replace(/\\/g, "/"), ...m });
     await ctx.close();
   }
 
   // Видео: один подход, дальше не настаиваем.
-  let videoOut = null;
   try {
     const vctx = await browser.newContext({
       viewport: { width: 390, height: 844 },
@@ -225,15 +225,15 @@ try {
     const vpage = await vctx.newPage();
     await vpage.goto(base + "/?s=1&m=day", { waitUntil: "load" });
     await vpage.evaluate(() => document.fonts.ready);
-    await vpage.waitForTimeout(400);
+    await vpage.waitForTimeout(500);
     await vpage.click("#layersBtn");
-    await vpage.waitForTimeout(450);
+    await vpage.waitForTimeout(550);
     await vpage.click('[data-cat="works"]');
-    await vpage.waitForTimeout(600);
+    await vpage.waitForTimeout(650);
     await vpage.click("#sheetClose");
     await vpage.waitForTimeout(450);
     await vpage.click("#panelClose");
-    await vpage.waitForTimeout(300);
+    await vpage.waitForTimeout(350);
     const video = vpage.video();
     await vpage.close();
     await vctx.close();
