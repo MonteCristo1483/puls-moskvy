@@ -1,0 +1,18 @@
+{
+  "generated_at": "2026-11-27T16:22:00Z",
+  "fetched_at": "2026-11-27T16:22:00Z",
+  "sources": {
+    "works": {
+      "dataset": 2855,
+      "rows": 4109,
+      "fetched_at": "2026-11-27T16:22:00Z"
+    },
+    "permits": {
+      "dataset": 64028,
+      "rows": 4019,
+      "fetched_at": "2026-11-27T16:22:00Z"
+    }
+  },
+  "stale": false,
+  "version": 1
+}
