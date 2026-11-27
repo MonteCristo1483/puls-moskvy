@@ -1,0 +1,231 @@
+﻿name: Deploy
+
+on:
+  # Автодеплой: любой merge в main публикует сайт.
+  push:
+    branches: [main]
+  # Ручной запуск остаётся для отката данных и повторной публикации.
+  workflow_dispatch:
+    inputs:
+      data_ref:
+        description: "Git branch containing data.zip (fallback if the release is missing)"
+        required: false
+        default: "data"
+      data_tag:
+        description: "GitHub Release tag with the data.zip asset"
+        required: false
+        default: "data"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Download data snapshot
+        env:
+          DATA_REF: ${{ inputs.data_ref || 'data' }}
+          DATA_TAG: ${{ inputs.data_tag || 'data' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/data
+          if gh release view "$DATA_TAG" >/dev/null 2>&1; then
+            echo "Release '$DATA_TAG' найден — берём ассет data.zip"
+            gh release download "$DATA_TAG" --pattern data.zip \
+              --dir /tmp/data --clobber || {
+              echo "::error::не удалось скачать data.zip из Release '$DATA_TAG'"; exit 1; }
+          else
+            echo "::warning::Release '$DATA_TAG' нет — запасной путь: ветка '$DATA_REF'"
+            git fetch origin "$DATA_REF" --depth=1
+            git show "origin/$DATA_REF:data.zip" > /tmp/data/data.zip || {
+              echo "::error::data.zip нет ни в Release '$DATA_TAG', ни в ветке '$DATA_REF'"; exit 1; }
+          fi
+          test -s /tmp/data/data.zip || {
+            echo "::error::data.zip пустой — проверьте Release '$DATA_TAG' и ветку '$DATA_REF'"; exit 1; }
+          ls -l /tmp/data/data.zip
+          sha256sum /tmp/data/data.zip
+          mkdir -p web/public/data
+          if unzip -Z1 /tmp/data/data.zip | grep -q '^data/'; then
+            unzip -q /tmp/data/data.zip -d web/public
+          else
+            unzip -q /tmp/data/data.zip -d web/public/data
+          fi
+
+      # Страховка от публикации битых данных: та же проверка, что в PR
+      # по pipeline. Ненулевой exit code останавливает деплой, старый сайт
+      # продолжает работать.
+      - name: Validate data
+        run: |
+          if [ -f web/public/data/districts/manifest.json ]; then
+            python3 pipeline/validate_export.py web/public/data --format new
+          else
+            python3 pipeline/validate_export.py web/public/data --format legacy
+          fi
+
+      # Golden set: проверка фактов (входы метро, порог магистрали, стройка).
+      # Несовпадение знака останавливает публикацию.
+      - name: Check golden facts
+        run: |
+          if [ -f web/public/data/districts/manifest.json ]; then
+            mkdir -p /tmp/golden-data
+            python3 - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          data = Path("web/public/data")
+          district = data / "districts" / "1275551"
+          buildings_path = district / "buildings.geojson"
+          buildings = json.loads(buildings_path.read_text(encoding="utf-8"))
+          home_ids = {
+              feature["properties"]["id"]
+              for feature in buildings.get("features", [])
+              if feature.get("properties", {}).get("is_home") is True
+          }
+          source_facts = json.loads(Path("data/golden/facts.json").read_text(encoding="utf-8"))
+          facts = source_facts.get("facts", [])
+          applicable = [fact for fact in facts if fact["building_id"] in home_ids]
+          Path("/tmp/golden-data/facts.json").write_text(
+              json.dumps({"facts": applicable}, ensure_ascii=False), encoding="utf-8"
+          )
+          shutil.copyfile(buildings_path, "/tmp/golden-data/presnya_buildings.geojson")
+          print(f"Golden для жилых домов: {len(applicable)}/{len(facts)}; нежилых пропущено: {len(facts) - len(applicable)}")
+          PY
+            python3 pipeline/check_golden.py /tmp/golden-data --facts /tmp/golden-data/facts.json
+          else
+            python3 pipeline/check_golden.py web/public/data
+          fi
+
+      - name: Detect bundled city tiles
+        id: bundled-tiles
+        run: |
+          if [ -s web/public/data/buildings.pmtiles ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Тайлы собираются из уже проверенных данных. Готового образа нет
+      # (ghcr.io/felt/tippecanoe недоступен), поэтому tippecanoe 2.79.0
+      # собирается из исходников — ~2 минуты на ubuntu-раннере.
+      # Образ кэшируется как docker save tar: ключ привязан к Dockerfile,
+      # поэтому пересборка происходит только при его изменении.
+      - name: Cache tippecanoe image
+        id: tippecanoe-cache
+        if: steps.bundled-tiles.outputs.present != 'true'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: /tmp/tippecanoe-image.tar
+          key: tippecanoe-2.79.0-${{ hashFiles('pipeline/docker/tippecanoe.Dockerfile') }}
+
+      - name: Load tippecanoe image
+        if: steps.bundled-tiles.outputs.present != 'true' && steps.tippecanoe-cache.outputs.cache-hit == 'true'
+        run: docker load -i /tmp/tippecanoe-image.tar
+
+      - name: Build tippecanoe image
+        if: steps.bundled-tiles.outputs.present != 'true' && steps.tippecanoe-cache.outputs.cache-hit != 'true'
+        run: |
+          docker build -f pipeline/docker/tippecanoe.Dockerfile -t karta-tippecanoe:2.79.0 .
+          docker save karta-tippecanoe:2.79.0 -o /tmp/tippecanoe-image.tar
+
+      # PMTiles + компактный buildings-index.json. Оба артефакта gitignored
+      # и попадают на прод только внутри dist. --without-breakdown — вариант,
+      # принятый в B1: breakdown (64% веса) клиент берёт из routes/<id>.json,
+      # в тайлах остаются id/index/height/address/year (761 КБ вместо 2,10 МБ).
+      - name: Build tiles
+        if: steps.bundled-tiles.outputs.present != 'true'
+        run: python3 pipeline/build_tiles.py --without-breakdown
+
+      # Клиент запрашивает стабильное имя data/tiles/buildings.pmtiles.
+      # Хеш в имени нужен был для кэша, но дубль на 2 МБ на gh-pages не нужен.
+      - name: Name tiles for the client
+        if: steps.bundled-tiles.outputs.present != 'true'
+        run: |
+          cd web/public/data/tiles
+          tile=$(ls buildings-*.pmtiles | head -n 1)
+          test -n "$tile"
+          mv "$tile" buildings.pmtiles
+          ls -l buildings.pmtiles
+
+      - name: Install
+        working-directory: web
+        run: npm ci
+
+      - name: Build static export
+        working-directory: web
+        run: npm run build
+
+
+      - name: Disable Jekyll
+        run: touch web/dist/.nojekyll
+
+      # Смоук-тесты интерфейса до публикации: если страница не открывается,
+      # поиск/тема/слои сломаны или /r/ не отдаётся — деплой падает, и на
+      # gh-pages остаётся предыдущая рабочая версия. Браузер кэшируется по
+      # версии Playwright, чтобы не тянуть ~130 МБ каждый деплой.
+      - name: Playwright version
+        id: playwright
+        working-directory: web
+        run: |
+          version=$(node -e "console.log(require('./node_modules/@playwright/test/package.json').version)")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Playwright chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke tests
+        working-directory: web
+        run: npm run e2e
+
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@329bcc8f12caed2cefe5a5b80781499a6f3b361b # v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./web/dist
+          publish_branch: gh-pages
+          enable_jekyll: false
+
+      # Range-запросы к тайлам — единственный способ убедиться, что CDN
+      # отдаёт 206, а не 200 с целым файлом (бюджет первого экрана).
+      # Предупреждение, а не падение: сайт уже опубликован, а gh-pages
+      # отдаёт файлы с задержкой до пары минут.
+      - name: Smoke test tiles (Range 206)
+        continue-on-error: true
+        run: |
+          if [ -s web/public/data/buildings.pmtiles ]; then
+            path="data/buildings.pmtiles"
+          else
+            path="data/tiles/buildings.pmtiles"
+          fi
+          url="https://montecristo1483.github.io/karta-okruzheniya/$path"
+          for attempt in 1 2 3; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -r 0-99 "$url" || true)
+            echo "attempt $attempt: HTTP $code"
+            if [ "$code" = "206" ]; then
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::tiles smoke test: expected 206, got '$code'"
+          exit 1

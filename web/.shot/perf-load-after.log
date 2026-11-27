@@ -1,0 +1,10 @@
+﻿serving C:\Users\starg\OneDrive\╨Ф╨╛╨║╤Г╨╝╨╡╨╜╤В╤Л\GitHub\karta-okruzheniya\web\.shot on http://localhost:4213
+after z13.5: FPS=60.2 p95=21.2ms max=29.2ms >33ms=0/240
+after z16.6: FPS=59.9 p95=20.3ms max=25.3ms >33ms=0/240
+after houses: A=261040352 B=61716008 dist=12000m
+after fly AтЖТB (╤Б╨░╨╝ ╨┐╨╡╤А╨╡╨╗╤С╤В): FPS=28.3 p95=292ms max=438.4ms >33ms=31/62
+after fly AтЖТB (+2╤Б ╨┐╨╛╤Б╨╗╨╡ moveend): FPS=59.9 p95=17.7ms max=18.5ms >33ms=0/60
+after flight duration: 5003ms
+after select B (╨╖╨╛╨╜╤Л/╨╝╨░╤А╤И╤А╤Г╤В╤Л/hero): FPS=59.9 p95=18.4ms max=24.4ms >33ms=0/208
+after url after select: ?perf=1&building=61716008
+saved C:\Users\starg\OneDrive\╨Ф╨╛╨║╤Г╨╝╨╡╨╜╤В╤Л\GitHub\karta-okruzheniya\web\.shot\perf-load-after-z16.6.png

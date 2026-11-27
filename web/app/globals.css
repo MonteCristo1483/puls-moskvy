@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --bg-top: #f7f2e8;
+  --bg-mid: #e9eff5;
+  --bg-bottom: #d9e6f0;
+}
+
+[data-theme="dark"] {
+  --bg-top: #1b222c;
+  --bg-mid: #232b37;
+  --bg-bottom: #2a3441;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--bg-mid);
+}
+
+/* Открытая карточка дома на десктопе: уводим контролы карты из-под неё.
+   clamp обязан совпадать с шириной карточки в building-sheet.tsx. */
+@media (min-width: 768px) {
+  html:has([data-sheet="open"]) .maplibregl-ctrl-top-right {
+    right: calc(clamp(340px, 38vw, 420px) + 1.5rem);
+    transition: right 200ms ease-out;
+  }
+}
+
+/* На xl поиск центрирован и перекрывает контролы, сдвинутые влево от карточки:
+   опускаем их ниже строки поиска. */
+@media (min-width: 1280px) {
+  html:has([data-sheet="open"]) .maplibregl-ctrl-top-right {
+    top: 4.5rem;
+    transition: right 200ms ease-out, top 200ms ease-out;
+  }
+}
+
+/* Фон вместо подложки-тайлов: пастельная диорама / глубокий сине-серый (тёмная) */
+.map-gradient {
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-mid) 55%, var(--bg-bottom) 100%);
+}
+
+/* Мягкий грейд и радиальный вигнет поверх канваса карты (не поверх UI) */
+.map-grade canvas.maplibregl-canvas {
+  filter: saturate(1.06) contrast(1.03);
+}
+
+.map-haze {
+  z-index: 1;
+  height: 96px;
+  background: linear-gradient(
+    180deg,
+    rgba(227, 235, 244, 0.32) 0%,
+    rgba(227, 235, 244, 0.14) 45%,
+    rgba(227, 235, 244, 0) 100%
+  );
+}
+
+@media (max-width: 767px) {
+  .map-haze {
+    height: 72px;
+  }
+}
+
+[data-theme="dark"] .map-haze {
+  display: none;
+}
+
+.map-vignette {
+  z-index: 1;
+  background: radial-gradient(
+    ellipse 78% 74% at 50% 48%,
+    rgba(18, 32, 48, 0) 58%,
+    rgba(18, 32, 48, 0.14) 100%
+  );
+}
+
+[data-theme="dark"] .map-vignette {
+  background: radial-gradient(
+    ellipse 78% 74% at 50% 48%,
+    rgba(4, 8, 16, 0) 54%,
+    rgba(4, 8, 16, 0.28) 100%
+  );
+}
