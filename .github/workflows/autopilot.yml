@@ -84,6 +84,20 @@ jobs:
         run: |
           set -euo pipefail
           number=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
-          gh pr merge "$number" --squash --delete-branch
+          # GitHub вычисляет mergeable асинхронно: сразу после создания PR
+          # `gh pr merge` отвечает «not mergeable», и прогон падает зря.
+          # Пробуем до ~2 минут, прежде чем считать это настоящей ошибкой.
+          for attempt in $(seq 1 12); do
+            if gh pr merge "$number" --squash --delete-branch; then
+              echo "PR #$number смержен (попытка $attempt)"
+              break
+            fi
+            if [ "$attempt" = "12" ]; then
+              echo "::error::PR #$number не удалось смержить за 2 минуты"
+              exit 1
+            fi
+            echo "попытка $attempt: PR #$number пока не mergeable, ждём 10 с"
+            sleep 10
+          done
           # Пуш от GITHUB_TOKEN не запускает Deploy по push — вызываем явно.
           gh workflow run deploy.yml --ref main -f data_ref=data
