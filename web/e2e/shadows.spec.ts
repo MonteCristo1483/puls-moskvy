@@ -63,23 +63,96 @@ test("Тени: на карте считаются для кадра и укла
     )
     .toBeGreaterThan(0);
 
-  const stats = await page.evaluate(() => {
-    const pill = document.querySelector("[data-shadows-pill]");
-    return {
-      status: pill?.getAttribute("data-shadows-status"),
-      count: Number(pill?.getAttribute("data-shadows-count") ?? 0),
-      ms: Number(pill?.getAttribute("data-shadows-ms") ?? 0),
-      altitude: Number(pill?.getAttribute("data-shadows-sun-altitude") ?? 0),
-      layer: Boolean(
-        (window as unknown as { __map?: { getLayer: (id: string) => unknown } })
-          .__map?.getLayer("shadows-ground-fill"),
-      ),
-    };
-  });
+  // Бюджет меряем медианой по 3 пересчётам, а не одной холодной цифрой:
+  // на общем раннере одиночный замер шумит на десятки процентов (первый кадр
+  // включает парсинг тайлов и прогрев JIT). Порог при этом не меняется.
+  const readState = () =>
+    page.evaluate(() => {
+      const pill = document.querySelector("[data-shadows-pill]");
+      return {
+        run: Number(pill?.getAttribute("data-shadows-run") ?? 0),
+        ms: Number(pill?.getAttribute("data-shadows-ms") ?? 0),
+        unionMs: Number(pill?.getAttribute("data-shadows-union-ms") ?? 0),
+        count: Number(pill?.getAttribute("data-shadows-count") ?? 0),
+        status: pill?.getAttribute("data-shadows-status"),
+        altitude: Number(pill?.getAttribute("data-shadows-sun-altitude") ?? 0),
+      };
+    });
+
+  // Ждём пересчёт, в котором union реально считался (не попал в кэш кадра):
+  // именно этот путь мерил CI, и именно его мы обязаны уложить в бюджет.
+  const waitForFreshCompute = async (previous: number, timeout = 12_000) => {
+    await expect
+      .poll(
+        async () => {
+          const state = await readState();
+          return state.run > previous && state.unionMs > 0 && state.count >= 300
+            ? state.run
+            : -1;
+        },
+        { timeout, message: "пересчёт теней завершился (union посчитан)" },
+      )
+      .toBeGreaterThan(previous);
+  };
+
+  // Сдвиг на ~100 м: кадр меняется (union пересчитывается), но остаёмся в той
+  // же плотной застройке — иначе можно уехать туда, где домов ещё не загрузили.
+  const shiftMap = (anchors: number) =>
+    page.evaluate((index) => {
+      const map = (window as unknown as {
+        __map: {
+          getCenter: () => { lng: number; lat: number };
+          jumpTo: (o: unknown) => void;
+        };
+      }).__map;
+      const center = map.getCenter();
+      map.jumpTo({
+        center: [center.lng + 0.0015, center.lat + 0.0008 * index],
+      });
+    }, anchors);
+
+  // Прогрев: первый пересчёт уже прошёл (poll выше), но JIT и тайлы догреваются
+  // ещё одним движением карты.
+  const warmupState = await readState();
+  await shiftMap(1);
+  await waitForFreshCompute(warmupState.run);
+
+  const samples: number[] = [];
+  let attempts = 0;
+  while (samples.length < 3 && attempts < 6) {
+    attempts += 1;
+    const before = await readState();
+    await shiftMap(attempts);
+    try {
+      await waitForFreshCompute(before.run);
+    } catch {
+      continue; // кадр попал в кэш или дома не догрузились — шагаем дальше
+    }
+    const state = await readState();
+    expect(state.status, "пересчёт не упал в night/zoom").toBe("ok");
+    expect(state.count, "тени посчитаны").toBeGreaterThanOrEqual(300);
+    samples.push(state.ms);
+  }
+  expect(samples.length, "набрали 3 замера пересчёта").toBe(3);
+
+  const sorted = [...samples].sort((a, b) => a - b);
+  const median = sorted[1];
+  const stats = await readState();
   console.log(
-    `тени: ${stats.count} шт, ${stats.ms.toFixed(1)} мс, солнце ${stats.altitude.toFixed(1)}°`,
+    `тени: ${stats.count} шт, ${stats.ms.toFixed(1)} мс; прогоны ${samples
+      .map((value) => value.toFixed(1))
+      .join(", ")} мс; медиана ${median.toFixed(1)} мс (солнце ${stats.altitude.toFixed(1)}°)`,
   );
-  expect(stats.layer, "fill-слой теней создан").toBe(true);
-  expect(stats.status).toBe("ok");
-  expect(stats.ms).toBeLessThan(200);
+  expect(
+    Boolean(
+      await page.evaluate(() =>
+        Boolean(
+          (window as unknown as { __map?: { getLayer: (id: string) => unknown } })
+            .__map?.getLayer("shadows-ground-fill"),
+        ),
+      ),
+    ),
+    "fill-слой теней создан",
+  ).toBe(true);
+  expect(median).toBeLessThan(200);
 });

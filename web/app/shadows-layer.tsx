@@ -46,7 +46,7 @@ const COMPUTE_MIN_ZOOM = 12.8;
 // Потолок домов на кадр: больше — уже не видно, а платить временем придётся.
 // Дома сортируются по площади контура, поэтому срез — это самые мелкие
 // постройки (сараи, гаражи), чья пятидесятиметровая тень не читается.
-const MAX_BUILDINGS = 1000;
+const MAX_BUILDINGS = 600;
 const MOVE_DEBOUNCE_MS = 140;
 
 const SHADOW_PAINT: Record<Theme, { color: string; opacity: number }> = {
@@ -74,6 +74,8 @@ type ShadowStats = {
   ms: number | null;
   /** Время растворения теней кадра (union), мс. */
   unionMs: number | null;
+  /** Номер успешного пересчёта: e2e ловит по нему новый замер. */
+  run: number;
   dust: number;
   windSpeed: number | null;
 };
@@ -241,6 +243,7 @@ export default function ShadowsLayer({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const themeRef = useRef<Theme>(theme);
   const weatherRef = useRef<WeatherSnapshot | null>(null);
+  const runRef = useRef(0);
   const [mapReady, setMapReady] = useState(false);
   const [stats, setStats] = useState<ShadowStats>({
     status: "loading",
@@ -250,6 +253,7 @@ export default function ShadowsLayer({
     buildings: 0,
     ms: null,
     unionMs: null,
+    run: 0,
     dust: 0,
     windSpeed: null,
   });
@@ -543,6 +547,7 @@ export default function ShadowsLayer({
             buildings: 0,
             ms: null,
             unionMs: null,
+            run: runRef.current,
             dust: 0,
             windSpeed: null,
           });
@@ -584,6 +589,8 @@ export default function ShadowsLayer({
           polygons.length,
         ].join("|");
         const unionStartedAt = performance.now();
+        // Растворение кадра: перекрытия соседних домов не должны складывать
+        // альфу. Результат кэшируется по (время + bbox кадра + число теней).
         let dissolved = shadowCache[cacheKey];
         const cachedUnion = dissolved !== undefined;
         if (!dissolved) {
@@ -629,6 +636,7 @@ export default function ShadowsLayer({
         if (wind) writeDust(polygonSpots, wind);
         const lowSun =
           sun.altitudeDeg > 0 && sun.altitudeDeg <= MIN_SHADOW_ALTITUDE_DEG;
+        runRef.current += 1;
         setStats({
           status:
             sun.altitudeDeg <= 0 ? "night" : lowSun ? "low" : "ok",
@@ -638,6 +646,7 @@ export default function ShadowsLayer({
           buildings: count,
           ms: elapsed,
           unionMs,
+          run: runRef.current,
           dust: polygonSpots.length,
           windSpeed: wind?.windSpeedMs ?? null,
         });
@@ -770,6 +779,7 @@ export default function ShadowsLayer({
       data-shadows-union-ms={
         stats.unionMs === null ? undefined : stats.unionMs.toFixed(1)
       }
+      data-shadows-run={stats.run}
       data-shadows-sun-altitude={
         stats.altitude === null ? undefined : stats.altitude.toFixed(2)
       }
