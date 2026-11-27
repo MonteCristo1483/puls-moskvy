@@ -17,6 +17,7 @@ import { geometryCenter, haversineM, nearestPosition } from "./geo-utils";
 import { ICON_PATHS, type IconKey } from "./icons";
 import { initialTheme, MAP_FOG, THEME_KEY } from "./theme";
 import type { Theme } from "./theme";
+import WeatherLayer from "./weather-layer";
 
 // Пути относительные — статический экспорт живёт в подпапке
 // basePath (/karta-okruzheniya на GitHub Pages).
@@ -5311,6 +5312,7 @@ export default function Map() {
         theme={theme}
         onThemeToggle={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
       />
+      <WeatherLayer visible={visible.weather} theme={theme} />
       <SearchBox
         items={searchItems}
         onSelect={(id) => selectRef.current?.(id)}
