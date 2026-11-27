@@ -3,6 +3,7 @@ import { ICON_PATHS, type IconKey } from "./icons";
 
 export type LayerKey =
   | "weather"
+  | "shadows"
   | "schools"
   | "kindergartens"
   | "parks"
@@ -15,6 +16,8 @@ export type Visibility = Record<LayerKey, boolean>;
 
 export const DEFAULT_VISIBILITY: Visibility = {
   weather: true,
+  // Тени — тяжёлый слой (пересчёт по кадру), поэтому по умолчанию выключен.
+  shadows: false,
   schools: true,
   kindergartens: true,
   parks: true,
@@ -26,6 +29,7 @@ export const DEFAULT_VISIBILITY: Visibility = {
 
 const ITEMS: { key: LayerKey; label: string; icon: IconKey }[] = [
   { key: "weather", label: "Погода и ветер", icon: "wind" },
+  { key: "shadows", label: "Тени и пыль", icon: "shadows" },
   { key: "schools", label: "Школы", icon: "school" },
   { key: "kindergartens", label: "Сады", icon: "kindergarten" },
   { key: "parks", label: "Парки", icon: "park" },

@@ -14,5 +14,5 @@ test("Слои: чип «Маршруты» переключает checked и о
   await page.getByText("Маршруты", { exact: true }).click();
   await expect(routes).not.toBeChecked();
 
-  await expect(page.getByRole("checkbox")).toHaveCount(8);
+  await expect(page.getByRole("checkbox")).toHaveCount(9);
 });

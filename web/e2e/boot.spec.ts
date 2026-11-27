@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 // Boot-смоук: страница отдаётся, поиск и панель слоёв на месте, данных
 // хватило, чтобы не показать fatal-баннер. Карта/WebGL не проверяются.
-test("Boot: открывается страница, есть поиск и 8 чипов, нет fatal-баннера", async ({
+test("Boot: открывается страница, есть поиск и 9 чипов, нет fatal-баннера", async ({
   page,
 }) => {
   const response = await page.goto("./");
@@ -11,9 +11,10 @@ test("Boot: открывается страница, есть поиск и 8 ч
   await expect(page.getByLabel("Поиск дома по адресу")).toBeVisible();
 
   const chips = page.getByRole("checkbox");
-  await expect(chips).toHaveCount(8);
+  await expect(chips).toHaveCount(9);
   for (const label of [
     "Погода и ветер",
+    "Тени и пыль",
     "Школы",
     "Сады",
     "Парки",
