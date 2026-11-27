@@ -13,6 +13,7 @@ import type { SearchItem } from "./search-box";
 import { THEME_KEY, initialTheme } from "./theme";
 import type { Theme } from "./theme";
 import Timeline, { readTimelineParam, writeTimelineParam } from "./timeline";
+import { readWorkParam } from "./layers/works-store";
 import { mountMap } from "./map/engine";
 import { ISOCHRONE_URL, fetchGzipJson } from "./map/tiles";
 import type { BuildingRoutes, FlatRoutes, IsoGeometry, IsochroneData } from "./map/tiles";
@@ -94,6 +95,17 @@ export default function Map() {
   // пишем через history.replaceState: без перезагрузки и без сервера.
   useEffect(() => {
     setClockMinutes(readTimelineParam(window.location.search));
+  }, []);
+
+  // S7: ссылка на объект работ (?work=) включает слой «Стройки и работы».
+  // Иначе deep link открыл бы карточку на карте без самих работ: человек не
+  // видит объект, о котором читает. Слой по-прежнему живёт в реестре, здесь —
+  // только синхронизация URL с общим состоянием видимости (как у `?t=`).
+  useEffect(() => {
+    if (readWorkParam() === null) return;
+    setVisible((current) =>
+      current.works ? current : { ...current, works: true },
+    );
   }, []);
 
   const changeClockMinutes = (next: number | null) => {

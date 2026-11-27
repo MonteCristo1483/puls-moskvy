@@ -5,11 +5,14 @@ import type { LayerPlugin } from "./contract";
 import { factsLayer } from "./facts";
 import { shadowsLayer } from "./shadows";
 import { weatherLayer } from "./weather";
+import { worksCardLayer, worksLayer } from "./works";
 
 export const LAYERS: readonly LayerPlugin[] = [
   weatherLayer,
   shadowsLayer,
   factsLayer,
+  worksLayer,
+  worksCardLayer,
 ];
 
 /** Все ключи чипов, которыми управляют слои (для панели и тестов). */

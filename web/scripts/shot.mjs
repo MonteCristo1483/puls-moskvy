@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 // Скриншоты и замер кадров карты в заданном DPR.
 // Использование:
-//   node scripts/shot.mjs <имя.png> <dpr> <ширина> <высота> [--perf] [--headless] [--t=HH:MM] [--dark]
+//   node scripts/shot.mjs <имя.png> <dpr> <ширина> <высота> [--perf] [--headless] [--t=HH:MM] [--work=<id>] [--dark]
 // Примеры:
 //   node scripts/shot.mjs shots/before-1290-dpr1.png 1 1290 900 --perf
 //   node scripts/shot.mjs shots/before-1290-dpr2.png 2 1290 900
 //   node scripts/shot.mjs shots/s4-morning.png 1 1280 800 --headless --t=08:00
+//   node scripts/shot.mjs shots/s7-card.png 1 1280 800 --headless --work=5111866498
 //   node scripts/shot.mjs shots/s4-dark.png 1 1280 800 --headless --dark
 //
 // Готовит Pages-раскладку (dist → .shot/puls-moskvy), поднимает
 // статик-сервер, снимает скриншот. `--t=HH:MM` открывает карту на выбранном
-// часе таймлайна (S4), `--dark` — в тёмной теме. С --perf сначала меряет простой,
+// часе таймлайна (S4), `--work=<global_id>` — карточку объекта работ (S7),
+// `--dark` — в тёмной теме. С --perf сначала меряет простой,
 // затем 200 кадров при непрерывном зуме колесом (1.5× и обратно),
 // печатает медиану, p95 и число кадров >33 мс.
 import { spawn } from "node:child_process";
@@ -28,7 +30,7 @@ const BASE_URL = `http://127.0.0.1:${PORT}/puls-moskvy/`;
 
 const [outArg, dprArg, widthArg, heightArg, ...flags] = process.argv.slice(2);
 if (!outArg || !dprArg || !widthArg || !heightArg) {
-  console.error("usage: node scripts/shot.mjs <out.png> <dpr> <width> <height> [--perf] [--headless] [--t=HH:MM] [--dark]");
+  console.error("usage: node scripts/shot.mjs <out.png> <dpr> <width> <height> [--perf] [--headless] [--t=HH:MM] [--work=<id>] [--dark]");
   process.exit(1);
 }
 const out = resolve(WEB_ROOT, outArg);
@@ -41,7 +43,14 @@ const dark = flags.includes("--dark");
 // S4: `--t=08:00` — снимок не «сейчас», а на выбранном часе таймлайна.
 const clockFlag = flags.find((flag) => flag.startsWith("--t="));
 const clock = clockFlag ? clockFlag.slice("--t=".length) : null;
-const targetUrl = clock ? `${BASE_URL}?t=${encodeURIComponent(clock)}` : BASE_URL;
+// S7: `--work=<global_id>` — открыть карточку объекта работ по ссылке.
+const workFlag = flags.find((flag) => flag.startsWith("--work="));
+const work = workFlag ? workFlag.slice("--work=".length) : null;
+const params = new URLSearchParams();
+if (clock) params.set("t", clock);
+if (work) params.set("work", work);
+const query = params.toString().replace(/%3A/gi, ":");
+const targetUrl = query ? `${BASE_URL}?${query}` : BASE_URL;
 
 async function waitForServer() {
   const deadline = Date.now() + 20_000;
@@ -103,6 +112,20 @@ try {
       };
     });
     console.log(`таймлайн: ${shown.timeline} · плашка: ${shown.pill}`);
+  }
+
+  if (work) {
+    // Карточка объекта грузит works.geojson (6,5 МБ) — ждём её, а не таймер.
+    await page.waitForSelector("[data-work-card]", { timeout: 20_000 });
+    console.log(`url: ${targetUrl}`);
+    const card = await page.evaluate(() => {
+      const node = document.querySelector("[data-work-card]");
+      return {
+        id: node?.getAttribute("data-work-id") ?? null,
+        text: node?.textContent?.replace(/\s+/g, " ").trim().slice(0, 180) ?? null,
+      };
+    });
+    console.log(`карточка ${card.id}: ${card.text}`);
   }
 
   if (perf) {

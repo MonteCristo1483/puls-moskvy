@@ -1,11 +1,12 @@
 import type { Theme } from "./theme";
 import { ICON_PATHS, type IconKey } from "./icons";
-import { Chip } from "./design";
+import { Chip, ChipButton } from "./design";
 import { LAYERS } from "./layers/registry";
 
 export type LayerKey =
   | "weather"
   | "shadows"
+  | "works"
   | "schools"
   | "kindergartens"
   | "parks"
@@ -39,11 +40,20 @@ export const DEFAULT_VISIBILITY: Visibility = {
   weather: layerDefault("weather"),
   // Тени — тяжёлый слой (пересчёт по кадру), поэтому по умолчанию выключен.
   shadows: layerDefault("shadows"),
+  // Работы — 4109 объектов из набора 2855: по умолчанию не грузим их всем.
+  works: layerDefault("works"),
 };
 
-const ITEMS: { key: LayerKey; label: string; icon: IconKey }[] = [
+const ITEMS: {
+  key: LayerKey;
+  label: string;
+  icon: IconKey;
+  /** Переключать кнопкой-пилюлей, а не настоящим чекбоксом. */
+  button?: boolean;
+}[] = [
   { key: "weather", label: "Погода и ветер", icon: "wind" },
   { key: "shadows", label: "Тени и пыль", icon: "shadows" },
+  { key: "works", label: "Стройки и работы", icon: "works", button: true },
   { key: "schools", label: "Школы", icon: "school" },
   { key: "kindergartens", label: "Сады", icon: "kindergarten" },
   { key: "parks", label: "Парки", icon: "park" },
@@ -112,16 +122,33 @@ export default function LayersPanel({
         {theme === "dark" ? <SunIcon /> : <MoonIcon />}
       </button>
       <div className="flex flex-col items-start gap-1.5">
-        {ITEMS.map(({ key, label, icon }) => (
-          <Chip
-            key={key}
-            checked={visibility[key]}
-            onToggle={() => onToggle(key)}
-          >
-            <LayerIcon d={ICON_PATHS[icon]} />
-            <span>{label}</span>
-          </Chip>
-        ))}
+        {ITEMS.map(({ key, label, icon, button }) => {
+          const content = (
+            <>
+              <LayerIcon d={ICON_PATHS[icon]} />
+              <span>{label}</span>
+            </>
+          );
+          // Слой работ — кнопка-переключатель: он не чекбокс формы, а
+          // включение слоя по клику (ChipButton, тот же материал, aria-pressed).
+          return button ? (
+            <ChipButton
+              key={key}
+              checked={visibility[key]}
+              onToggle={() => onToggle(key)}
+            >
+              {content}
+            </ChipButton>
+          ) : (
+            <Chip
+              key={key}
+              checked={visibility[key]}
+              onToggle={() => onToggle(key)}
+            >
+              {content}
+            </Chip>
+          );
+        })}
       </div>
     </div>
   );
