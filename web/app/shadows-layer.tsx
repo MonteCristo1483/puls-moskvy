@@ -6,8 +6,8 @@
 // контура и его сдвинутой копии (polygon-clipping), fill-слой ПОД зданиями.
 // Пересчитываем только то, что попало в текущий кадр: дома берём из уже
 // загруженных тайлов `buildings` через querySourceFeatures, отсекаем по
-// границам viewport. Шаг — moveend/resize с debounce; время — текущее
-// московское (или `?t=HH:MM`, чтобы посмотреть тени на 14:00).
+// границам viewport. Шаг — moveend/resize с debounce; время — выбранное на
+// таймлайне (`?t=HH:MM`, разбор в map.tsx/timeline.tsx) или текущее московское.
 //
 // Пыль: вектор ветра из live-weather (тот же кэш, что у слоя погоды — запрос
 // не дублируется) над полигонами строек/пустырей из overlays.pmtiles
@@ -17,12 +17,11 @@ import { useEffect, useRef, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import type { Feature, FeatureCollection, MultiPolygon, Point } from "geojson";
 import type { Theme } from "./theme";
-import { fetchWeather, type WeatherSnapshot } from "./live-weather";
+import { fetchWeather, weatherAt, type WeatherSnapshot, type WeatherValues } from "./live-weather";
 import {
   formatClock,
   moscowClockMinutes,
   moscowInstantAt,
-  parseClockParam,
   sunPosition,
   type SunPosition,
 } from "./solar";
@@ -232,9 +231,12 @@ function escapedKey(value: string): string {
 export default function ShadowsLayer({
   visible,
   theme,
+  minutes,
 }: {
   visible: boolean;
   theme: Theme;
+  /** Выбранный час таймлайна, минуты от полуночи; null — живой режим. */
+  minutes: number | null;
 }) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const themeRef = useRef<Theme>(theme);
@@ -242,7 +244,7 @@ export default function ShadowsLayer({
   const [mapReady, setMapReady] = useState(false);
   const [stats, setStats] = useState<ShadowStats>({
     status: "loading",
-    timeMinutes: moscowClockMinutes(Date.now()),
+    timeMinutes: minutes ?? moscowClockMinutes(Date.now()),
     altitude: null,
     azimuth: null,
     buildings: 0,
@@ -295,9 +297,9 @@ export default function ShadowsLayer({
     let buildingsLoads = 0;
     let lastSignature = "";
     let weatherAbort: AbortController | null = null;
-    const fixedMinutes = parseClockParam(
-      new URLSearchParams(window.location.search).get("t"),
-    );
+    // Время таймлайна приходит свойством: второй разбор `?t=` не нужен.
+    // URL читает map.tsx (readTimelineParam → parseClockParam) и передаёт минуты.
+    const fixedMinutes = minutes;
 
     /** Время, на которое считаем тени: `?t=HH:MM` или «сейчас» (МСК). */
     function targetTime(): { date: Date; minutes: number } {
@@ -434,7 +436,7 @@ export default function ShadowsLayer({
       return groups;
     }
 
-    function writeDust(spots: Array<{ lon: number; lat: number }>, snapshot: WeatherSnapshot | null) {
+    function writeDust(spots: Array<{ lon: number; lat: number }>, wind: WeatherValues | null) {
       if (!map.getSource(DUST_SOURCE_ID)) {
         map.addSource(DUST_SOURCE_ID, {
           type: "geojson",
@@ -447,12 +449,12 @@ export default function ShadowsLayer({
       } else {
         map.setLayoutProperty(DUST_LAYER_ID, "icon-image", icon);
       }
-      const rotate = snapshot ? (snapshot.windDirectionDeg + 180) % 360 : 0;
+      const rotate = wind ? (wind.windDirectionDeg + 180) % 360 : 0;
       const features: Array<Feature<Point, { rotate: number; speed: number }>> =
-        snapshot
+        wind
           ? spots.map((spot) => ({
               type: "Feature" as const,
-              properties: { rotate, speed: snapshot.windSpeedMs },
+              properties: { rotate, speed: wind.windSpeedMs },
               geometry: {
                 type: "Point" as const,
                 coordinates: [spot.lon, spot.lat],
@@ -619,7 +621,12 @@ export default function ShadowsLayer({
         // ── Пыль: ветер уже кэширован слоем погоды (live-weather). ──────
         const polygonSpots = dustSpots(collectConstruction(), center.lat);
         const cached = weatherRef.current;
-        if (cached) writeDust(polygonSpots, cached);
+        // Ветер — на выбранный час: иначе тени на 08:00 считались бы по ветру
+        // «сейчас», и стрелки пыли спорили бы с плашкой.
+        const wind: WeatherValues | null = cached
+          ? (weatherAt(cached, fixedMinutes) ?? cached)
+          : null;
+        if (wind) writeDust(polygonSpots, wind);
         const lowSun =
           sun.altitudeDeg > 0 && sun.altitudeDeg <= MIN_SHADOW_ALTITUDE_DEG;
         setStats({
@@ -632,7 +639,7 @@ export default function ShadowsLayer({
           ms: elapsed,
           unionMs,
           dust: polygonSpots.length,
-          windSpeed: cached?.windSpeedMs ?? null,
+          windSpeed: wind?.windSpeedMs ?? null,
         });
         if (cached) {
           attempts = 0;
@@ -645,11 +652,12 @@ export default function ShadowsLayer({
           .then((snapshot) => {
             if (disposed) return;
             weatherRef.current = snapshot;
-            writeDust(polygonSpots, snapshot);
+            const hourWind = weatherAt(snapshot, fixedMinutes) ?? snapshot;
+            writeDust(polygonSpots, hourWind);
             setStats((current) => ({
               ...current,
               dust: polygonSpots.length,
-              windSpeed: snapshot.windSpeedMs,
+              windSpeed: hourWind.windSpeedMs,
             }));
           })
           .catch(() => {
@@ -716,7 +724,7 @@ export default function ShadowsLayer({
         // Карта уже удалена вместе со стилем.
       }
     };
-  }, [visible, mapReady, theme]);
+  }, [visible, mapReady, theme, minutes]);
 
   if (!visible) return null;
 
