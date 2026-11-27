@@ -254,6 +254,33 @@ function formatNumber(value: number): string {
   return value.toFixed(1).replace(".", ",").replace("-", "−");
 }
 
+/** Порог «осадков нет»: ниже 0,05 мм Open-Meteo отдаёт следы, а не осадки. */
+const PRECIP_MIN_MM = 0.05;
+
+export type PrecipKind = "none" | "rain" | "sleet" | "snow";
+
+const PRECIP_LABELS: Record<PrecipKind, string> = {
+  none: "без осадков",
+  rain: "дождь",
+  sleet: "мокрый снег",
+  snow: "снег",
+};
+
+/**
+ * Есть ли сейчас осадки и в каком виде. Вид — по температуре модели
+ * (Open-Meteo), а не по прибору: ≥ +1 °C — дождь, от −1 до +1 °C — мокрый
+ * снег, ниже −1 °C — снег. Это ответ «есть ли дождь/снег», а не замер.
+ */
+export function precipitationKind(
+  temperatureC: number,
+  precipitationMm: number,
+): PrecipKind {
+  if (precipitationMm < PRECIP_MIN_MM) return "none";
+  if (temperatureC >= 1) return "rain";
+  if (temperatureC >= -1) return "sleet";
+  return "snow";
+}
+
 export default function WeatherLayer({
   visible,
   theme,
@@ -450,14 +477,23 @@ export default function WeatherLayer({
     hour !== null && minutes !== null
       ? weatherKind(minutes, Math.floor(moscowClockMinutes(Date.now())))
       : null;
+  // Осадки: явный ответ «есть ли сейчас дождь/снег» вместо молчания или
+  // голых «0,4 мм». Вид — по температуре модели (см. precipitationKind).
+  const precipKind: PrecipKind | null = values
+    ? precipitationKind(values.temperatureC, values.precipitationMm)
+    : null;
+  const precipLine =
+    precipKind === null
+      ? ""
+      : precipKind === "none"
+        ? PRECIP_LABELS.none
+        : `${PRECIP_LABELS[precipKind]} ${formatNumber(
+            values?.precipitationMm ?? 0,
+          )} мм`;
   const valueLine = values
     ? `${values.temperatureC > 0 ? "+" : ""}${formatNumber(
         values.temperatureC,
-      )} °C · ветер ${formatNumber(values.windSpeedMs)} м/с${
-        values.precipitationMm >= 0.05
-          ? ` · ${formatNumber(values.precipitationMm)} мм`
-          : ""
-      }`
+      )} °C · ветер ${formatNumber(values.windSpeedMs)} м/с · ${precipLine}`
     : status === "loading"
       ? "Погода · загрузка…"
       : "Погода недоступна";
@@ -480,6 +516,12 @@ export default function WeatherLayer({
       }
       data-weather-clock={clock ?? undefined}
       data-weather-kind={kind ?? undefined}
+      data-weather-precip={precipKind ?? undefined}
+      data-weather-precip-mm={
+        precipKind === null || precipKind === "none" || !values
+          ? undefined
+          : values.precipitationMm.toFixed(2)
+      }
       role="status"
       title="Погода и ветер: Open-Meteo, данные CC BY 4.0. Стрелки показывают, куда дует ветер; обновление раз в 15 минут."
       className="absolute bottom-2 left-3 z-20"

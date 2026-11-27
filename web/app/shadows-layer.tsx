@@ -69,6 +69,16 @@ type ShadowStats = {
   windSpeed: number | null;
 };
 
+/**
+ * D0: плашка теней по умолчанию уходит с первого экрана, но остаётся в DOM
+ * (это ещё и измерительный прибор тестов) и возвращается по `?shadows=1`.
+ * Флаг читаем из `location.search`: сайт живёт в подпапке Pages (basePath
+ * /puls-moskvy), поэтому query — единственное надёжное место для параметра.
+ */
+export function readShadowsPillFlag(search: string): boolean {
+  return new URLSearchParams(search).get("shadows") === "1";
+}
+
 type FootprintGroup = {
   rings: Ring[];
   ringKeys: Record<string, true>;
@@ -247,7 +257,16 @@ export default function ShadowsLayer({
     windSpeed: null,
   });
 
+  // D0: по умолчанию плашка скрыта визуально (opacity 0), `?shadows=1`
+  // показывает её как раньше. Флаг читаем в эффекте: на сервере window нет,
+  // а начальный рендер должен совпасть с SSR-разметкой.
+  const [pillShown, setPillShown] = useState(false);
+
   themeRef.current = theme;
+
+  useEffect(() => {
+    setPillShown(readShadowsPillFlag(window.location.search));
+  }, []);
 
   // Карту создаёт map.tsx; ждём её в window.__map (как weather-layer).
   useEffect(() => {
@@ -761,6 +780,11 @@ export default function ShadowsLayer({
   return (
     <Pill
       data-shadows-pill="1"
+      // D0: геометрию не трогаем (тесты меряют габариты и перекрытия) —
+      // прячем только визуально, оставляя элемент в потоке и в DOM.
+      data-shadows-hidden={pillShown ? "0" : "1"}
+      aria-hidden={pillShown ? undefined : true}
+      style={pillShown ? undefined : { opacity: 0, pointerEvents: "none" }}
       data-shadows-status={stats.status}
       data-shadows-time={timeLabel}
       data-shadows-count={stats.buildings}
