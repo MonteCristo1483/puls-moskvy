@@ -10,8 +10,10 @@ import LayersPanel, { DEFAULT_VISIBILITY } from "./layers-panel";
 import type { Visibility } from "./layers-panel";
 import SearchBox from "./search-box";
 import type { SearchItem } from "./search-box";
-import { THEME_KEY, initialTheme } from "./theme";
+import { readThemeOverride, themeForTime } from "./daylight";
+import { initialTheme } from "./theme";
 import type { Theme } from "./theme";
+import { moscowClockMinutes } from "./solar";
 import Timeline, { readTimelineParam, writeTimelineParam } from "./timeline";
 import { readWorkParam } from "./layers/works-store";
 import { mountMap } from "./map/engine";
@@ -48,8 +50,11 @@ export default function Map() {
     point: [number, number];
     status: "idle" | "loading" | "error" | "far";
   } | null>(null);
-  const [theme, setTheme] = useState<Theme>("light"); // стабильно для SSR/гидрации
-  const [mounted, setMounted] = useState(false);
+  // D3: тема выводится из времени, а не выбирается пользователем.
+  // Начальное значение стабильно для SSR/гидрации, реальное ставит эффект.
+  const [theme, setTheme] = useState<Theme>("light");
+  // Текущее московское время в минутах для живого режима; null до монтирования.
+  const [nowMinutes, setNowMinutes] = useState<number | null>(null);
   const [fatalError, setFatalError] = useState<string | null>(null);
   // Splash: "show" → "fade" (карта готова или 2 с) → "gone".
   const [splash, setSplash] = useState<"show" | "fade" | "gone">("show");
@@ -83,7 +88,8 @@ export default function Map() {
   const isoGeomRef = useRef<IsoGeometry | null>(null);
   const setIsoSourceRef = useRef<((geom: IsoGeometry | null) => void) | null>(null);
   const noticeTimerRef = useRef<number | null>(null);
-  // Реальная тема для карты доступна сразу (карта — клиент-only).
+  // Реальная тема для карты доступна сразу (карта — клиент-only): её считает
+  // тот же initialTheme(), что и эффект ниже.
   const themeRef = useRef<Theme>(initialTheme());
 
   const updateSelected = (b: SelectedBuilding | null) => {
@@ -168,26 +174,36 @@ export default function Map() {
     };
   }, [selected?.id, contour]);
 
-  // После монтирования синхронизируемся с localStorage (антфлеш-скрипт
-  // в layout уже выставил data-theme; здесь подхватываем UI).
+  // D3: в живом режиме («Сейчас») тикаем раз в минуту, чтобы на рассвете
+  // тема сменилась сама, без перезагрузки. При выбранном часе таймлайна
+  // время фиксировано и тикать не нужно.
   useEffect(() => {
-    const real = initialTheme();
-    themeRef.current = real;
-    setMounted(true);
-    setTheme(real);
-  }, []);
+    if (clockMinutes !== null) return;
+    const sync = () => setNowMinutes(Math.floor(moscowClockMinutes(Date.now())));
+    sync();
+    const timer = window.setInterval(sync, 60_000);
+    return () => window.clearInterval(timer);
+  }, [clockMinutes]);
 
+  // Тема — следствие времени: выбранный час таймлайна, в живом режиме —
+  // текущее московское время. `?theme=` — детерминированный оверрайд для
+  // тестов и скриншотов, он сильнее расчёта по Солнцу.
+  // applyThemeRef перекрашивает слои и 3D, поэтому зовём только при смене.
   useEffect(() => {
-    if (!mounted) return;
-    themeRef.current = theme;
-    document.documentElement.dataset.theme = theme;
-    try {
-      localStorage.setItem(THEME_KEY, theme);
-    } catch {
-      // приватный режим — тема просто не сохранится
+    const override = readThemeOverride(window.location.search);
+    const minutes = clockMinutes ?? nowMinutes;
+    let next: Theme;
+    if (override !== null) next = override;
+    else if (minutes === null) return;
+    else next = themeForTime(minutes);
+
+    document.documentElement.dataset.theme = next;
+    if (themeRef.current !== next) {
+      themeRef.current = next;
+      applyThemeRef.current?.(next);
     }
-    applyThemeRef.current?.(theme);
-  }, [theme, mounted]);
+    setTheme(next);
+  }, [clockMinutes, nowMinutes]);
 
   // ── Перф-оверлей (?perf=1) ─────────────────────────────────────────────
   // Диагностика клиента: FPS по rAF, p95 кадра, число загруженных тайлов и
@@ -329,8 +345,6 @@ export default function Map() {
         onToggle={(key) =>
           setVisible((v) => ({ ...v, [key]: !v[key] }))
         }
-        theme={theme}
-        onThemeToggle={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
       />
       {/* Слои карты: реестр сам знает, что подключать и что рисовать. */}
       <LayerHost visible={visible} theme={theme} minutes={clockMinutes} />

@@ -12,7 +12,9 @@
 // Готовит Pages-раскладку (dist → .shot/puls-moskvy), поднимает
 // статик-сервер, снимает скриншот. `--t=HH:MM` открывает карту на выбранном
 // часе таймлайна (S4), `--work=<global_id>` — карточку объекта работ (S7),
-// `--dark` — в тёмной теме. С --perf сначала меряет простой,
+// `--dark` — тёмная тема через `?theme=dark` (D3: тема следует за временем,
+// параметр — детерминированный оверрайд, он побеждает расчёт по Солнцу).
+// С --perf сначала меряет простой,
 // затем 200 кадров при непрерывном зуме колесом (1.5× и обратно),
 // печатает медиану, p95 и число кадров >33 мс.
 import { spawn } from "node:child_process";
@@ -49,6 +51,9 @@ const work = workFlag ? workFlag.slice("--work=".length) : null;
 const params = new URLSearchParams();
 if (clock) params.set("t", clock);
 if (work) params.set("work", work);
+// D3: `--dark` — детерминированная тёмная тема через `?theme=dark`
+// (ручного тумблера и localStorage больше нет).
+if (dark) params.set("theme", "dark");
 const query = params.toString().replace(/%3A/gi, ":");
 const targetUrl = query ? `${BASE_URL}?${query}` : BASE_URL;
 
@@ -91,12 +96,6 @@ try {
     viewport: { width, height },
     deviceScaleFactor: dpr,
   });
-  if (dark) {
-    // Тема читается антфлеш-скриптом layout.tsx из localStorage.
-    await context.addInitScript(() => {
-      window.localStorage.setItem("karta-theme", "dark");
-    });
-  }
   const page = await context.newPage();
   await page.goto(targetUrl, { waitUntil: "networkidle" });
   await page.waitForSelector("canvas.maplibregl-canvas", { timeout: 20_000 });

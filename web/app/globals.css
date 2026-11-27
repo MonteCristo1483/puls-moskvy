@@ -88,3 +88,37 @@ body {
     var(--c-vignette-edge) 100%
   );
 }
+
+/* D3: тема переключается по часам, поэтому цвета интерфейса должны
+   перетекать, а не щёлкать. Анимируем только цветовые свойства — никаких
+   transform/filter, иначе дёргается карта. `:where()` держит специфичность
+   нулевой, чтобы не отменять собственные transition-* утилиты компонентов;
+   элементы с transition-colors получают ту же длительность явно. */
+@media (prefers-reduced-motion: no-preference) {
+  html,
+  body {
+    transition:
+      background-color 500ms ease,
+      color 500ms ease;
+  }
+
+  html[data-theme] .transition-colors {
+    transition-duration: 500ms;
+  }
+
+  :where(html[data-theme], html[data-theme] *) {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-duration: 500ms;
+    transition-timing-function: ease;
+  }
+}
+
+/* Для тех, кому движение мешает, смена темы происходит мгновенно. */
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body,
+  html[data-theme] .transition-colors,
+  :where(html[data-theme], html[data-theme] *) {
+    transition: none;
+  }
+}
