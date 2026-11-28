@@ -40,79 +40,123 @@ async function readNotFoundPage(urlPath) {
   }
 }
 
-createServer(async (req, res) => {
-  const urlPath = decodeURIComponent(new URL(req.url, "http://x").pathname);
-  try {
-    let path = urlPath;
-    if (path.endsWith("/")) path += "index.html";
-    const file = normalize(join(root, path));
-    if (!file.startsWith(normalize(root))) {
-      res.writeHead(403).end("forbidden");
-      return;
-    }
-    const fileStat = await stat(file);
-    const headers = {
-      "content-type": MIME[extname(file)] ?? "application/octet-stream",
-      "content-length": fileStat.size,
-      "accept-ranges": "bytes",
-      "cache-control": "no-cache",
-    };
-    const rangeHeader = req.headers.range;
-    if (rangeHeader) {
-      const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
-      if (!match || fileStat.size === 0) {
-        res.writeHead(416, { "content-range": `bytes */${fileStat.size}` }).end();
-        return;
-      }
-      let start = match[1] ? Number(match[1]) : 0;
-      let end = match[2] ? Number(match[2]) : fileStat.size - 1;
-      if (!match[1] && match[2]) {
-        const suffixLength = Number(match[2]);
-        start = Math.max(0, fileStat.size - suffixLength);
-        end = fileStat.size - 1;
-      }
-      if (
-        !Number.isSafeInteger(start) ||
-        !Number.isSafeInteger(end) ||
-        start >= fileStat.size ||
-        end < start
-      ) {
-        res.writeHead(416, { "content-range": `bytes */${fileStat.size}` }).end();
-        return;
-      }
-      end = Math.min(end, fileStat.size - 1);
-      const body = Buffer.alloc(end - start + 1);
-      const handle = await open(file, "r");
-      try {
-        await handle.read(body, 0, body.length, start);
-      } finally {
-        await handle.close();
-      }
-      res.writeHead(206, {
-        ...headers,
-        "content-length": body.length,
-        "content-range": `bytes ${start}-${end}/${fileStat.size}`,
-      });
+// Сервер тестовый, но обязан быть устойчивым: Playwright регулярно отменяет
+// загрузки (уход со страницы, закрытие контекста), а крупных файлов у нас
+// хватает — geojson работ 4.5 МБ, PMTiles, чанки. Раньше обрыв клиентом давал
+// необработанную ошибку потока, процесс падал, и остальные тесты получали
+// `ERR_CONNECTION_REFUSED` (флак, который дважды ломал прогон). Поэтому:
+// • любая ошибка ответа гасится обработчиком `error` на res;
+// • тело запроса обрабатывается в async-функции, чей reject не всплывает;
+// • `clientError` (битый HTTP от клиента) закрывает сокет, а не процесс.
+const server = createServer((req, res) => {
+  // Клиент ушёл — не считаем это ошибкой сервера.
+  res.on("error", () => {});
+  req.on("error", () => {});
+
+  const handle = async () => {
+    const urlPath = decodeURIComponent(new URL(req.url, "http://x").pathname);
+    /** Отправка ответа с проверкой: после обрыва писать уже некуда. */
+    const send = (status, headers, body) => {
+      if (res.writableEnded || res.destroyed) return;
+      res.writeHead(status, headers);
       res.end(body);
-      return;
-    }
-    res.writeHead(200, headers);
-    if (req.method === "HEAD") {
-      res.end();
-      return;
-    }
-    res.end(await readFile(file));
-  } catch {
-    const page = await readNotFoundPage(urlPath);
-    if (page) {
-      res.writeHead(404, {
-        "content-type": "text/html; charset=utf-8",
-        "content-length": page.length,
+    };
+    try {
+      let path = urlPath;
+      if (path.endsWith("/")) path += "index.html";
+      const file = normalize(join(root, path));
+      if (!file.startsWith(normalize(root))) {
+        send(403, {}, "forbidden");
+        return;
+      }
+      const fileStat = await stat(file);
+      const headers = {
+        "content-type": MIME[extname(file)] ?? "application/octet-stream",
+        "content-length": fileStat.size,
+        "accept-ranges": "bytes",
         "cache-control": "no-cache",
-      });
-      res.end(page);
-      return;
+      };
+      const rangeHeader = req.headers.range;
+      if (rangeHeader) {
+        const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
+        if (!match || fileStat.size === 0) {
+          send(416, { "content-range": `bytes */${fileStat.size}` });
+          return;
+        }
+        let start = match[1] ? Number(match[1]) : 0;
+        let end = match[2] ? Number(match[2]) : fileStat.size - 1;
+        if (!match[1] && match[2]) {
+          const suffixLength = Number(match[2]);
+          start = Math.max(0, fileStat.size - suffixLength);
+          end = fileStat.size - 1;
+        }
+        if (
+          !Number.isSafeInteger(start) ||
+          !Number.isSafeInteger(end) ||
+          start >= fileStat.size ||
+          end < start
+        ) {
+          send(416, { "content-range": `bytes */${fileStat.size}` });
+          return;
+        }
+        end = Math.min(end, fileStat.size - 1);
+        const body = Buffer.alloc(end - start + 1);
+        const handleFile = await open(file, "r");
+        try {
+          await handleFile.read(body, 0, body.length, start);
+        } finally {
+          await handleFile.close();
+        }
+        send(
+          206,
+          {
+            ...headers,
+            "content-length": body.length,
+            "content-range": `bytes ${start}-${end}/${fileStat.size}`,
+          },
+          body,
+        );
+        return;
+      }
+      if (req.method === "HEAD") {
+        send(200, headers);
+        return;
+      }
+      send(200, headers, await readFile(file));
+    } catch {
+      const page = await readNotFoundPage(urlPath).catch(() => null);
+      if (page) {
+        send(
+          404,
+          {
+            "content-type": "text/html; charset=utf-8",
+            "content-length": page.length,
+            "cache-control": "no-cache",
+          },
+          page,
+        );
+        return;
+      }
+      send(404, {}, "not found");
     }
-    res.writeHead(404).end("not found");
-  }
-}).listen(port, () => console.log(`serving ${root} on http://localhost:${port}`));
+  };
+
+  // Reject не должен всплывать наружу: он убивает процесс сервера.
+  void handle().catch(() => {
+    if (!res.writableEnded && !res.destroyed) {
+      try {
+        res.writeHead(500, {});
+        res.end();
+      } catch {
+        // сокет уже закрыт — молча выходим
+      }
+    }
+  });
+});
+
+server.on("clientError", (_error, socket) => {
+  if (socket.writable) socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+  socket.destroy();
+});
+
+server.listen(port, () => console.log(`serving ${root} on http://localhost:${port}`));
