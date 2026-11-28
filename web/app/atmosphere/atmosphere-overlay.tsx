@@ -219,14 +219,7 @@ export default function AtmosphereOverlay({ context }: { context: LayerContext }
           precipAlpha,
         );
       } else if (scene.kind === "snow") {
-        drawSnow(
-          ctx,
-          scene.snow,
-          palette.wind,
-          "#ffffff",
-          precipAlpha,
-          timeSec,
-        );
+        drawSnow(ctx, scene.snow, precipAlpha, timeSec);
       } else if (scene.kind === "fog") {
         drawFog(
           ctx,

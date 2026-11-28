@@ -102,9 +102,9 @@ export function snowSpeedPx(unit = 1): number {
   );
 }
 
-/** Плотность снега: на 390×844 — 700 снежинок (приёмка требует ≥ 400). */
+/** Плотность снега: на 390×844 — 800 снежинок (приёмка требует ≥ 400). */
 export function snowCount(width: number, height: number): number {
-  return Math.min(800, Math.round((width * height) / 470));
+  return Math.min(800, Math.round((width * height) / 400));
 }
 
 export type SnowFlake = {
@@ -114,9 +114,62 @@ export type SnowFlake = {
   speed: number;
   swayPhase: number;
   swaySpeed: number;
+  /** Радиус ядра, px (1,0–2,4). */
   radius: number;
+  /** Ведро размера: 0 — мелкие, 1 — средние, 2 — крупные. */
+  bucket: SnowBucket;
   alpha: number;
 };
+
+/**
+ * Три ведра размеров: мелких ~50 %, средних ~35 %, крупных ~15 %.
+ * Радиус — по ядру, спрайт рисуется шире (с ореолом).
+ */
+export const SNOW_BUCKETS = [
+  { minRadius: 1.0, maxRadius: 1.3, share: 0.5 },
+  { minRadius: 1.4, maxRadius: 1.9, share: 0.35 },
+  { minRadius: 2.0, maxRadius: 2.4, share: 0.15 },
+] as const;
+export type SnowBucket = 0 | 1 | 2;
+
+/** Во сколько раз спрайт снежинки шире её ядра. */
+export const SNOW_SPRITE_RADIUS_SCALE = 3.4;
+
+export type SnowSpriteStop = { at: number; color: string; alpha: number };
+
+/**
+ * Стопы радиального градиента снежинки: ядро почти белое, к краю голубое и
+ * прозрачное. Альфа убывает монотонно — поэтому в кадре нет кольца.
+ */
+export const SNOW_SPRITE_STOPS: readonly SnowSpriteStop[] = [
+  { at: 0, color: "255,255,255", alpha: 0.95 },
+  { at: 0.5, color: "224,240,255", alpha: 0.55 },
+  { at: 1, color: "210,232,255", alpha: 0 },
+];
+
+/**
+ * Профиль альфы спрайта в доле радиуса 0…1 (кусочно-линейный между стопами).
+ * Чистая функция: по ней проверяется, что альфа не растёт к краю.
+ */
+export function snowAlphaProfile(t: number): number {
+  const clamped = Math.min(1, Math.max(0, t));
+  for (let index = 1; index < SNOW_SPRITE_STOPS.length; index += 1) {
+    const previous = SNOW_SPRITE_STOPS[index - 1];
+    const next = SNOW_SPRITE_STOPS[index];
+    if (clamped <= next.at) {
+      const span = next.at - previous.at;
+      const k = span <= 0 ? 0 : (clamped - previous.at) / span;
+      return previous.alpha + (next.alpha - previous.alpha) * k;
+    }
+  }
+  return SNOW_SPRITE_STOPS[SNOW_SPRITE_STOPS.length - 1].alpha;
+}
+
+export function snowBucketFor(roll: number): SnowBucket {
+  if (roll < 0.5) return 0;
+  if (roll < 0.85) return 1;
+  return 2;
+}
 
 export function createSnow(options: {
   width: number;
@@ -127,14 +180,19 @@ export function createSnow(options: {
   const count = snowCount(width, height);
   const flakes: SnowFlake[] = [];
   for (let index = 0; index < count; index += 1) {
+    const bucket = snowBucketFor(rand());
+    const spec = SNOW_BUCKETS[bucket];
     flakes.push({
       baseX: rand() * width,
       y: rand() * height,
       speed: snowSpeedPx(rand()),
       swayPhase: rand() * Math.PI * 2,
       swaySpeed: 0.5 + rand() * 0.9,
-      radius: 1.2 + rand() * 1.4,
-      alpha: 0.5 + rand() * 0.45,
+      radius:
+        spec.minRadius + rand() * (spec.maxRadius - spec.minRadius),
+      bucket,
+      // Альфа всей снежинки: центр спрайта ярче, край гаснет по профилю.
+      alpha: 0.85 + rand() * 0.15,
     });
   }
   return flakes;

@@ -5,8 +5,11 @@ import type { DustTrail } from "./dust";
 import {
   flightVector,
   snowSwayPx,
+  SNOW_SPRITE_RADIUS_SCALE,
+  SNOW_SPRITE_STOPS,
   type FogPuff,
   type RainDrop,
+  type SnowBucket,
   type SnowFlake,
 } from "./precip";
 import { streamDots, type WindStream } from "./streams";
@@ -175,45 +178,63 @@ export function drawRain(
   ctx.globalAlpha = 1;
 }
 
-/** Снег: круглые снежинки — голубой ореол и почти белое ядро. */
+/** Снег: спрайт с радиальным градиентом, без второго круга и без кольца. */
 export function drawSnow(
   ctx: CanvasRenderingContext2D,
   flakes: readonly SnowFlake[],
-  haloColor: string,
-  coreColor: string,
   opacity: number,
   timeSec: number,
 ): void {
   if (opacity <= 0.01 || flakes.length === 0) return;
-  // Ореол: лёгкая голубая аура, чтобы снежинка читалась на светлой карте.
-  ctx.fillStyle = haloColor;
   for (const flake of flakes) {
-    ctx.globalAlpha = flake.alpha * 0.6 * opacity;
-    ctx.beginPath();
-    ctx.arc(
-      flake.baseX + snowSwayPx(flake, timeSec),
-      flake.y,
-      flake.radius * 2.6,
-      0,
-      TAU,
-    );
-    ctx.fill();
-  }
-  // Ядро почти белое: снег, а не голубые точки.
-  ctx.fillStyle = coreColor;
-  for (const flake of flakes) {
+    const sprite = snowSprite(flake.bucket);
+    if (!sprite) continue;
+    const halo = flake.radius * SNOW_SPRITE_RADIUS_SCALE;
+    const size = halo * 2;
     ctx.globalAlpha = flake.alpha * opacity;
-    ctx.beginPath();
-    ctx.arc(
-      flake.baseX + snowSwayPx(flake, timeSec),
-      flake.y,
-      flake.radius,
-      0,
-      TAU,
+    ctx.drawImage(
+      sprite,
+      flake.baseX + snowSwayPx(flake, timeSec) - halo,
+      flake.y - halo,
+      size,
+      size,
     );
-    ctx.fill();
   }
   ctx.globalAlpha = 1;
+}
+
+/** Размеры битмапов спрайта по ведрам (мелкий/средний/крупный). */
+const SNOW_SPRITE_BITMAP_PX = [24, 36, 48];
+const snowSpriteCache: Array<HTMLCanvasElement | null> = [null, null, null];
+
+/**
+ * Спрайт снежинки: один радиальный градиент из стопов (монотонная альфа).
+ * Пререндерится один раз на ведро размера — в кадре только drawImage.
+ */
+function snowSprite(bucket: SnowBucket): HTMLCanvasElement | null {
+  const cached = snowSpriteCache[bucket];
+  if (cached) return cached;
+  const size = SNOW_SPRITE_BITMAP_PX[bucket];
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const gradient = ctx.createRadialGradient(
+    size / 2,
+    size / 2,
+    0,
+    size / 2,
+    size / 2,
+    size / 2,
+  );
+  for (const stop of SNOW_SPRITE_STOPS) {
+    gradient.addColorStop(stop.at, `rgba(${stop.color},${stop.alpha})`);
+  }
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  snowSpriteCache[bucket] = canvas;
+  return canvas;
 }
 
 /**

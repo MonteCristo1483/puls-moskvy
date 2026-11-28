@@ -15,6 +15,8 @@ import {
   rainCount,
   rainSpeedPx,
   rainStreakLengthPx,
+  SNOW_BUCKETS,
+  snowAlphaProfile,
   snowCount,
   snowSpeedPx,
   snowSwayPx,
@@ -455,18 +457,44 @@ test("Снег: медленный (≤110 px/с), качается ±8 px, ≥4
   expect(snowSpeedPx(0)).toBeGreaterThanOrEqual(70);
   const flakes = createSnow({ width: 390, height: 844, rand: seededRandom(5) });
   expect(flakes.length).toBeGreaterThanOrEqual(400);
+  const buckets = [0, 0, 0];
   for (const flake of flakes) {
-    expect(flake.radius).toBeGreaterThanOrEqual(1.2);
-    expect(flake.radius).toBeLessThanOrEqual(2.6);
-    expect(flake.alpha).toBeGreaterThanOrEqual(0.5);
-    expect(flake.alpha).toBeLessThanOrEqual(0.95);
+    const spec = SNOW_BUCKETS[flake.bucket];
+    expect(flake.radius).toBeGreaterThanOrEqual(spec.minRadius);
+    expect(flake.radius).toBeLessThanOrEqual(spec.maxRadius);
+    expect(flake.alpha).toBeGreaterThanOrEqual(0.85);
+    expect(flake.alpha).toBeLessThanOrEqual(1);
+    buckets[flake.bucket] += 1;
   }
+  // Крупных ~15 %, мелких ~50 % (с допуском на выборку).
+  const smallShare = buckets[0] / flakes.length;
+  const largeShare = buckets[2] / flakes.length;
+  expect(smallShare).toBeGreaterThanOrEqual(0.4);
+  expect(smallShare).toBeLessThanOrEqual(0.6);
+  expect(largeShare).toBeGreaterThanOrEqual(0.08);
+  expect(largeShare).toBeLessThanOrEqual(0.22);
+
   const flake = flakes[0];
   const swayA = snowSwayPx(flake, 0);
   const swayB = snowSwayPx(flake, 1.3);
   expect(swayA).not.toBe(swayB);
   expect(Math.abs(swayA)).toBeLessThanOrEqual(8);
   expect(Math.abs(swayB)).toBeLessThanOrEqual(8);
+});
+
+test("Снег: профиль альфы монотонно убывает к краю — без кольца", () => {
+  // Шесть замеров по радиусу: 0, 0,2, 0,4, 0,6, 0,8, 1,0 доли.
+  const fractions = [0, 0.2, 0.4, 0.6, 0.8, 1];
+  const alphas = fractions.map((fraction) => snowAlphaProfile(fraction));
+  for (let index = 1; index < alphas.length; index += 1) {
+    // Каждое следующее значение не больше предыдущего (+0,01 на шум).
+    expect(alphas[index]).toBeLessThanOrEqual(alphas[index - 1] + 0.01);
+  }
+  // Ядро почти белое и непрозрачное, край полностью прозрачный.
+  expect(alphas[0]).toBeGreaterThanOrEqual(0.9);
+  expect(alphas[alphas.length - 1]).toBeLessThanOrEqual(0.01);
+  expect(alphas[2]).toBeGreaterThan(0.4);
+  expect(alphas[2]).toBeLessThan(0.8);
 });
 
 test("Туман: 6–9 клочьев радиусом 60–140 px, альфа 0,18–0,40", () => {
