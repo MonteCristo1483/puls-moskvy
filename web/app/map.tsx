@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { MouseEvent } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import AboutData from "./about-data";
 import BuildingSheet from "./building-sheet";
 import type { BuildingBreakdown, SelectedBuilding } from "./building-sheet";
 import LayerHost from "./layers/host";
@@ -58,6 +60,10 @@ export default function Map() {
   const [fatalError, setFatalError] = useState<string | null>(null);
   // Splash: "show" → "fade" (карта готова или 2 с) → "gone".
   const [splash, setSplash] = useState<"show" | "fade" | "gone">("show");
+  // S10: экран «О данных» открывают две кнопки — плашка «© OpenStreetMap» на
+  // карте и футер-строка. Фокус возвращаем на ту, с которой открыли.
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const aboutOpenerRef = useRef<HTMLElement | null>(null);
   // Perf-1: оверлей диагностики включается только `?perf=1` (см. эффект ниже).
   const [perfEnabled, setPerfEnabled] = useState(false);
   const perfRef = useRef<HTMLDivElement | null>(null);
@@ -95,6 +101,20 @@ export default function Map() {
   const updateSelected = (b: SelectedBuilding | null) => {
     selectedRef.current = b;
     setSelected(b);
+  };
+
+  // S10: «О данных» — один диалог на две точки входа (плашка на карте и
+  // футер-строка). Запоминаем открывшую кнопку, чтобы вернуть ей фокус.
+  const openAbout = (event: MouseEvent<HTMLButtonElement>) => {
+    aboutOpenerRef.current = event.currentTarget;
+    setAboutOpen(true);
+  };
+
+  const closeAbout = () => {
+    setAboutOpen(false);
+    const opener = aboutOpenerRef.current;
+    aboutOpenerRef.current = null;
+    if (opener) window.requestAnimationFrame(() => opener.focus());
   };
 
   // S4: состояние таймлайна — только URL (`?t=HH:MM`). Читаем при загрузке,
@@ -434,10 +454,33 @@ export default function Map() {
           </div>
         </div>
       )}
-      <div className="pointer-events-none absolute bottom-2 right-3 max-w-md text-right text-11 leading-tight text-ink-2">
+      {/* S10: атрибуция на самой карте, а не только в футере. Плашка стоит в
+          одной строке с плашкой теней (та слева), поэтому на 390 px не наезжает
+          ни на погоду, ни на таймлайн, ни на футер-строку ниже.
+          z-[9]: над канвасом, но под карточкой дома (z-10) — как и футер. */}
+      <button
+        type="button"
+        data-attribution-plate="1"
+        aria-haspopup="dialog"
+        onClick={openAbout}
+        title="Атрибуция и лицензии: OpenStreetMap, data.mos.ru, Open-Meteo"
+        className="absolute bottom-[6.6rem] right-3 z-[9] cursor-pointer rounded-plate bg-panel px-2.5 py-1.5 text-10 font-medium leading-none text-ink shadow-plate backdrop-blur transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent md:bottom-[3.4rem]"
+      >
+        © OpenStreetMap
+      </button>
+      {/* Футер-строка — та же дверь в «О данных», текст и смысл прежние. */}
+      <button
+        type="button"
+        data-attribution-footer="1"
+        aria-haspopup="dialog"
+        onClick={openAbout}
+        title="Откуда эти данные, лицензии и дата выгрузки"
+        className="absolute bottom-2 right-3 z-[9] max-w-md cursor-pointer text-right text-11 leading-tight text-ink-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+      >
         © OpenStreetMap contributors, ODbL · Пульс Москвы — справочная
         информация по открытым данным, не является замером или оценкой стоимости
-      </div>
+      </button>
+      {aboutOpen && <AboutData onClose={closeAbout} />}
     </div>
   );
 }

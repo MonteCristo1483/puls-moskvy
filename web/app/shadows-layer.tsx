@@ -805,7 +805,9 @@ export default function ShadowsLayer({
       }
       role="status"
       title="Тени: проекция контура дома вдоль солнечного луча (не «настоящие» 3D-тени). Азимут от севера, высота солнца над горизонтом. Пыль: ветер Open-Meteo над полигонами строек из OSM."
-      className="absolute bottom-[3.4rem] left-3 z-20"
+      // S10: на телефоне плашка теней стоит над погодой, а в её строке справа —
+      // плашка-атрибуция «© OpenStreetMap» (см. map.tsx).
+      className="absolute bottom-[6.6rem] left-3 z-20 md:bottom-[3.4rem]"
     >
       <span className="text-13 font-semibold leading-none">
         Тени на {timeLabel}

@@ -183,7 +183,10 @@ export function Timeline({
       data-timeline-mode={live ? "live" : "fixed"}
       data-timeline-value={formatClock(currentMinutes)}
       title="Время на карте: погода, ветер и тени считаются на выбранный час. Ссылка сохраняет выбор (?t=ЧЧ:ММ)."
-      className="absolute bottom-[7.2rem] left-3 right-3 z-[9] flex select-none flex-col gap-1.5 md:bottom-[3.2rem] md:left-1/2 md:right-auto md:w-[min(58vw,560px)] md:-translate-x-1/2"
+      // S10: на телефоне под таймлайном стоят три строки — тени + атрибуция,
+      // погода, лицензии (футер), поэтому шкала поднята до 10.4rem. Десктопная
+      // раскладка не изменилась.
+      className="absolute bottom-[10.4rem] left-3 right-3 z-[9] flex select-none flex-col gap-1.5 md:bottom-[3.2rem] md:left-1/2 md:right-auto md:w-[min(58vw,560px)] md:-translate-x-1/2"
     >
       <div className="flex items-center justify-between gap-2">
         <span

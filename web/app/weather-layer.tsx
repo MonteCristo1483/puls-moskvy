@@ -524,7 +524,10 @@ export default function WeatherLayer({
       }
       role="status"
       title="Погода и ветер: Open-Meteo, данные CC BY 4.0. Стрелки показывают, куда дует ветер; обновление раз в 15 минут."
-      className="absolute bottom-2 left-3 z-20"
+      // S10: на телефоне нижняя строка отдана лицензиям (футер-строка), поэтому
+      // стопка плашек начинается выше: погода — 3.4rem, тени — 6.6rem,
+      // таймлайн — 10.4rem. На десктопе всё осталось как было.
+      className="absolute bottom-[3.4rem] left-3 z-20 md:bottom-2"
     >
       <span className="text-13 font-semibold leading-none">{valueLine}</span>
       <span
