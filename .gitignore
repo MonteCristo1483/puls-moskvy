@@ -29,3 +29,7 @@ web/probe/*.png
 # D2b: подложка и видео пробы — в репозиторий не идут
 web/probe2/*.png
 web/probe2/*.webm
+
+# D2b-3: подложка и видео пробы — в репозиторий не идут
+web/probe3/*.png
+web/probe3/*.webm
