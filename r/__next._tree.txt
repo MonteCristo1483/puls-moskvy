@@ -1,4 +1,4 @@
 :HL["/puls-moskvy/_next/static/chunks/05q1t89g2nc0y.css","style"]
 2:[["children",{"s":"__PAGE__","h":160}]]
 1:[["children",{"s":"r","h":96,"c":"$Q2"}]]
-0:{"b":"u8C0fauHAOHSsVGOCTOLe","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
+0:{"b":"qqrwPp_qosYQu53mLJqwu","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
