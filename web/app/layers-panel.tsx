@@ -1,5 +1,8 @@
+import { useSyncExternalStore } from "react";
 import { ICON_PATHS, type IconKey } from "./icons";
 import { Chip, ChipButton } from "./design";
+import { layerAvailable } from "./layers/availability";
+import { factsStore, initialFacts } from "./layers/facts-store";
 import { LAYERS } from "./layers/registry";
 
 export type LayerKey =
@@ -88,10 +91,20 @@ export default function LayersPanel({
   visibility: Visibility;
   onToggle: (key: LayerKey) => void;
 }) {
+  // S9: чип недоступного слоя не показываем. Пока факты грузятся, `available`
+  // возвращает true — панель не мигает на каждой загрузке страницы.
+  const facts = useSyncExternalStore(
+    factsStore.subscribe,
+    factsStore.get,
+    () => initialFacts,
+  );
+
   return (
     <div className="absolute left-3 top-[4.5rem] z-10 flex max-w-[calc(100%-1.5rem)] flex-col items-start gap-1.5 xl:top-3">
       <div className="flex flex-col items-start gap-1.5">
         {ITEMS.map(({ key, label, icon, button }) => {
+          const layer = LAYERS.find((item) => item.visibilityKey === key);
+          if (layer && !layerAvailable(layer, facts)) return null;
           const content = (
             <>
               <LayerIcon d={ICON_PATHS[icon]} />

@@ -1,10 +1,13 @@
 import { test, expect } from "@playwright/test";
+import { mockFreshMeta } from "./live-meta";
 
 // Boot-смоук: страница отдаётся, поиск и панель слоёв на месте, данных
 // хватило, чтобы не показать fatal-баннер. Карта/WebGL не проверяются.
 test("Boot: открывается страница, есть поиск и 9 чипов, нет fatal-баннера", async ({
   page,
 }) => {
+  // S9: без свежих фактов чип работ исчезает, а с ним и один из 9 чекбоксов.
+  await mockFreshMeta(page);
   const response = await page.goto("./");
   expect(response?.status(), "GET / (главная)").toBe(200);
 

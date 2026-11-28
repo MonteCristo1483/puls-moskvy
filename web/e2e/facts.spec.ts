@@ -1,13 +1,15 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mockFreshMeta, mskClock } from "./live-meta";
 
 // Бейдж городских фактов (S6). Файл `live/meta.json` в сборке может быть
 // любым (в CI его нет вовсе), поэтому оба состояния задаются моком сети:
-// свежие данные → «Данные на ДД.ММ ЧЧ:ММ» в МСК, файла нет или данные старше
-// 24 ч → «нет данных».
+// свежие данные → «Данные на ДД.ММ ЧЧ:ММ» в МСК, файла нет → «нет данных»,
+// данные старше 24 ч → «Данные устарели» с датой (S9). Свежесть задаётся
+// относительно «сейчас» (`mockFreshMeta`), а не датой файла в репозитории.
 const META_URL = "**/live/meta.json";
 
 const META = {
-  generated_at: "2026-11-27T06:14:00Z", // 09:14 МСК
+  generated_at: "2026-11-27T06:14:00Z", // форма ответа; дату задаёт мок
   fetched_at: "2026-11-27T06:14:00Z",
   sources: {
     works: { dataset: 2855, rows: 4109, fetched_at: "2026-11-27T06:14:00Z" },
@@ -52,14 +54,14 @@ async function box(page: Page, selector: string) {
 }
 
 test("Факты: свежий meta.json → дата данных в МСК", async ({ page }) => {
-  await mockMeta(page, META);
+  const generated = await mockFreshMeta(page);
   await page.goto("./");
 
   const badge = page.locator("[data-facts-badge]");
   await expect(badge).toBeVisible();
   await expect(badge).toHaveAttribute("data-facts-status", "ok");
-  await expect(badge).toContainText("Данные на 27.11 09:14");
-  await expect(badge).toHaveAttribute("data-facts-time", META.generated_at);
+  await expect(badge).toContainText(`Данные на ${mskClock(generated)}`);
+  await expect(badge).toHaveAttribute("data-facts-time", generated);
   // Источник и лицензия — в title плашки (атрибуция CC BY 4.0, S10).
   await expect(badge).toHaveAttribute("title", /CC BY 4\.0/);
 
@@ -95,7 +97,7 @@ test("Факты: файла нет → «нет данных» и карта н
   expect(pageErrors).toEqual([]);
 });
 
-test("Факты: данные старше 24 ч → «нет данных»", async ({ page }) => {
+test("Факты: данные старше 24 ч → «Данные устарели»", async ({ page }) => {
   const old = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
   await mockMeta(page, {
     ...META,
@@ -106,11 +108,12 @@ test("Факты: данные старше 24 ч → «нет данных»", 
   await page.goto("./");
   const badge = page.locator("[data-facts-badge]");
   await expect(badge).toHaveAttribute("data-facts-status", "missing");
-  await expect(badge).toContainText("нет данных");
+  await expect(badge).toContainText(`Данные устарели · ${mskClock(old)}`);
+  await expect(badge).toHaveAttribute("data-facts-time", old);
 });
 
 test("Факты: плашка не дублируется и не мешает поиску", async ({ page }) => {
-  await mockMeta(page, META);
+  await mockFreshMeta(page);
   await page.goto("./");
   await expect(page.locator("[data-facts-badge]")).toHaveCount(1);
   await expect(page.getByLabel("Поиск дома по адресу")).toBeVisible();
