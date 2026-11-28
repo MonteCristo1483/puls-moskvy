@@ -11,6 +11,13 @@ import type { Theme } from "./theme";
 export const TWILIGHT_DEG = 6;
 
 /**
+ * Показатель кривой силы света: `(1 − |h|/6)^0.55`, а не линейная. Линейная
+ * почти гасит оттенок у края окна, и «слайдер проходит через свет» не виден:
+ * при 5° от горизонта остаётся 17% силы, с кривой — 37%, при 0° — максимум.
+ */
+export const TWILIGHT_CURVE = 0.55;
+
+/**
  * Фаза неба. `night` — Солнце ниже −6°, `day` — выше +6°, `dawn`/`dusk` —
  * сумерки, различаемые по знаку изменения высоты за минуту.
  */
@@ -69,7 +76,9 @@ function sunAltitudeAt(minutesOfDay: number, reference: Date): number {
 
 /**
  * Сила сумеречного света 0…1: 1 при высоте 0° (Солнце на горизонте), 0 при
- * |высоте| ≥ 6°. Линейно между — карта не «щёлкает», а проходит через свет.
+ * |высоте| ≥ 6°. Между — кривая `(1 − |h|/6)^0.55`: оттенок заметен уже у
+ * края окна и максимален на горизонте, поэтому переход читается глазом,
+ * а не только по значению CSS-переменной.
  */
 export function twilightStrength(
   minutesOfDay: number,
@@ -81,7 +90,7 @@ export function twilightStrength(
 function strengthForAltitude(altitudeDeg: number): number {
   const distance = Math.abs(altitudeDeg);
   if (distance >= TWILIGHT_DEG) return 0;
-  return 1 - distance / TWILIGHT_DEG;
+  return Math.pow(1 - distance / TWILIGHT_DEG, TWILIGHT_CURVE);
 }
 
 /**

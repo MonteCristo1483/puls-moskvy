@@ -21,6 +21,8 @@ import { mockFreshMeta } from "./live-meta";
 // а не импортировать ожидание из проверяемого модуля.
 const CENTER: [number, number] = [55.7558, 37.6173];
 const TWILIGHT_DEG = 6;
+/** Кривая силы света: `(1 − |h|/6)^0.55`, а не линейная (см. daylight.ts). */
+const TWILIGHT_CURVE = 0.55;
 const REFERENCE = new Date();
 
 function altitudeAt(minutes: number): number {
@@ -71,7 +73,9 @@ function altitudeAttr(altitudeDeg: number): string {
 /** Ожидаемая сила сумерек из высоты: 1 на 0°, 0 за пределами ±6°. */
 function strengthFor(altitudeDeg: number): number {
   const distance = Math.abs(altitudeDeg);
-  return distance >= TWILIGHT_DEG ? 0 : 1 - distance / TWILIGHT_DEG;
+  return distance >= TWILIGHT_DEG
+    ? 0
+    : Math.pow(1 - distance / TWILIGHT_DEG, TWILIGHT_CURVE);
 }
 
 async function readSkin(page: Page) {
@@ -183,6 +187,9 @@ test("D4: --sky-tint растёт к 0° и падает при удалении
   // Дальше от горизонта — слабее: 0.5° > 3° > 5°.
   expect(strengths[2]).toBeGreaterThan(strengths[3]);
   expect(strengths[3]).toBeGreaterThan(strengths[4]);
+  // И это именно кривая, а не линейная ступенька: при 5° от горизонта
+  // линейная дала бы ~0.17, кривая 0.55 — ~0.37, поэтому оттенок уже виден.
+  expect(strengths[4]).toBeGreaterThan(0.3);
 
   // Слой света: не ловит клики, лежит ниже панелей (z-9/z-10) и переходит
   // плавно (400–600 мс), а не ступенькой.
