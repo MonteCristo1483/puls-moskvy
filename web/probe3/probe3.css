@@ -21,6 +21,7 @@
   --leader: rgba(39, 64, 92, 0.32);
   --line: rgba(39, 64, 92, 0.14);
   --shadow: 0 16px 34px rgba(39, 64, 92, 0.16), 0 2px 6px rgba(39, 64, 92, 0.08);
+  --bubble-drop: drop-shadow(0 12px 24px rgba(39, 64, 92, 0.16)) drop-shadow(0 2px 5px rgba(39, 64, 92, 0.08));
   --shadow-lg: 0 26px 60px rgba(39, 64, 92, 0.22);
   --icon-park: #17704a;
   --icon-school: #2d5a94;
@@ -49,6 +50,7 @@ html[data-mode="eve"] {
   --leader: rgba(240, 232, 220, 0.28);
   --line: rgba(240, 232, 220, 0.14);
   --shadow: 0 16px 34px rgba(0, 0, 0, 0.44), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --bubble-drop: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.46)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
   --shadow-lg: 0 26px 60px rgba(0, 0, 0, 0.5);
   --icon-park: #86dfae;
   --icon-school: #a6c9f2;
@@ -436,24 +438,63 @@ html[data-state="3"] .leaders { opacity: 1; }
 
 .bubble {
   --cat: var(--icon-park);
+  --b-path: none;
   position: absolute;
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 8px 13px 8px 10px;
-  border-radius: 18px;
-  background: var(--bubble);
-  border: 1px solid var(--bubble-line);
-  box-shadow: var(--shadow);
+  /* низ шире не становится: место под конус оставлено отступом снизу */
+  padding: 8px 13px 20px 10px;
+  border: 0;
+  background: none;
   color: var(--ink);
   white-space: nowrap;
-  backdrop-filter: blur(10px) saturate(1.04);
-  -webkit-backdrop-filter: blur(10px) saturate(1.04);
   z-index: 3;
   opacity: 0;
   visibility: hidden;
   transform: translateY(6px);
   transition: opacity 200ms linear, transform 260ms var(--ease), visibility 0s 260ms;
+}
+
+/* Стекло: размытие только внутри контура, иначе виден прямоугольник. */
+.bubble::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  backdrop-filter: blur(10px) saturate(1.04);
+  -webkit-backdrop-filter: blur(10px) saturate(1.04);
+  clip-path: var(--b-path);
+  -webkit-clip-path: var(--b-path);
+}
+
+@supports not (clip-path: path("M 0 0")) {
+  .bubble::before { display: none; }
+}
+
+/* Подложка бабла: path, а не картинка. Тень — drop-shadow, чтобы повторять контур. */
+.b-shape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+  overflow: visible;
+  filter: var(--bubble-drop);
+}
+
+.b-shape path {
+  fill: var(--bubble);
+  stroke: var(--bubble-line);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.b-icon,
+.b-text {
+  position: relative;
+  z-index: 2;
 }
 
 html[data-state="3"] .bubble {
@@ -466,13 +507,15 @@ html[data-state="3"] .bubble {
 .bubble::after {
   content: "";
   position: absolute;
-  left: 20px;
+  left: 50%;
   bottom: -5px;
   width: 7px;
   height: 7px;
+  margin-left: -3.5px;
   border-radius: 50%;
   background: var(--cat);
   box-shadow: 0 0 0 2px var(--bubble), 0 3px 8px rgba(39, 64, 92, 0.18);
+  z-index: 1;
 }
 
 .b-icon {
