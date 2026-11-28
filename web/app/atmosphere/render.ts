@@ -10,6 +10,7 @@ import {
   type SnowFlake,
 } from "./precip";
 import { streamDots, type WindStream } from "./streams";
+import { FOG_VEIL_ALPHA } from "./sky";
 import type { AtmospherePalette } from "./wind";
 
 const TAU = Math.PI * 2;
@@ -153,7 +154,7 @@ export function drawRain(
   const { dx, dy } = flightVector(bearingDeg);
   const buckets = 8;
   ctx.strokeStyle = color;
-  ctx.lineWidth = 1.1;
+  ctx.lineWidth = 1.8;
   ctx.lineCap = "round";
   for (let bucket = 0; bucket < buckets; bucket += 1) {
     const low = bucket / buckets;
@@ -174,16 +175,32 @@ export function drawRain(
   ctx.globalAlpha = 1;
 }
 
-/** Снег: круглые медленные снежинки с покачиванием поперёк. */
+/** Снег: круглые снежинки — голубой ореол и почти белое ядро. */
 export function drawSnow(
   ctx: CanvasRenderingContext2D,
   flakes: readonly SnowFlake[],
-  color: string,
+  haloColor: string,
+  coreColor: string,
   opacity: number,
   timeSec: number,
 ): void {
   if (opacity <= 0.01 || flakes.length === 0) return;
-  ctx.fillStyle = color;
+  // Ореол: лёгкая голубая аура, чтобы снежинка читалась на светлой карте.
+  ctx.fillStyle = haloColor;
+  for (const flake of flakes) {
+    ctx.globalAlpha = flake.alpha * 0.6 * opacity;
+    ctx.beginPath();
+    ctx.arc(
+      flake.baseX + snowSwayPx(flake, timeSec),
+      flake.y,
+      flake.radius * 2.6,
+      0,
+      TAU,
+    );
+    ctx.fill();
+  }
+  // Ядро почти белое: снег, а не голубые точки.
+  ctx.fillStyle = coreColor;
   for (const flake of flakes) {
     ctx.globalAlpha = flake.alpha * opacity;
     ctx.beginPath();
@@ -199,14 +216,25 @@ export function drawSnow(
   ctx.globalAlpha = 1;
 }
 
-/** Туман: крупные мягкие клочья, ползут по ветру. */
+/**
+ * Туман: общая вуаль снизу вверх (альфа ≤ 0,12) плюс крупные мягкие клочья.
+ * Карта остаётся различимой — это видимость, а не белая заливка.
+ */
 export function drawFog(
   ctx: CanvasRenderingContext2D,
   puffs: readonly FogPuff[],
   color: string,
   opacity: number,
+  width: number,
+  height: number,
 ): void {
   if (opacity <= 0.01 || puffs.length === 0) return;
+  const veil = ctx.createLinearGradient(0, height, 0, 0);
+  veil.addColorStop(0, rgba(color, FOG_VEIL_ALPHA * opacity));
+  veil.addColorStop(1, rgba(color, 0));
+  ctx.fillStyle = veil;
+  ctx.fillRect(0, 0, width, height);
+
   for (const puff of puffs) {
     const gradient = ctx.createRadialGradient(
       puff.x,
@@ -217,6 +245,7 @@ export function drawFog(
       puff.radius,
     );
     gradient.addColorStop(0, rgba(color, puff.alpha * opacity));
+    gradient.addColorStop(0.55, rgba(color, puff.alpha * 0.85 * opacity));
     gradient.addColorStop(1, rgba(color, 0));
     ctx.fillStyle = gradient;
     ctx.fillRect(

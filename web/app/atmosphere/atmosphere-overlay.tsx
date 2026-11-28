@@ -47,7 +47,9 @@ import {
   drawSnow,
 } from "./render";
 import {
+  FOG_COLOR,
   hasPrecipitation,
+  RAIN_COLOR,
   SKY_TRANSITION_MS,
   skyState,
   STREAM_OPACITY,
@@ -213,13 +215,27 @@ export default function AtmosphereOverlay({ context }: { context: LayerContext }
           ctx,
           scene.rain,
           scene.bearingDeg,
-          palette.wind,
+          RAIN_COLOR[theme],
           precipAlpha,
         );
       } else if (scene.kind === "snow") {
-        drawSnow(ctx, scene.snow, palette.wind, precipAlpha, timeSec);
+        drawSnow(
+          ctx,
+          scene.snow,
+          palette.wind,
+          "#ffffff",
+          precipAlpha,
+          timeSec,
+        );
       } else if (scene.kind === "fog") {
-        drawFog(ctx, scene.fog, palette.wind, fogAlpha);
+        drawFog(
+          ctx,
+          scene.fog,
+          FOG_COLOR[theme],
+          fogAlpha,
+          scene.width,
+          scene.height,
+        );
       }
       const trails = projectDustTrails();
       drawDust(ctx, trails, DUST_COLORS[theme], 1);
@@ -310,6 +326,9 @@ export default function AtmosphereOverlay({ context }: { context: LayerContext }
           ? Math.max(...scene.fog.map((puff) => puff.alpha))
           : 0;
       canvas.dataset.atmosphereFogAlpha = fogMax.toFixed(2);
+      canvas.dataset.atmosphereFogPuffs = String(
+        kind === "fog" ? scene.fog.length : 0,
+      );
       canvas.dataset.atmosphereDustColor = DUST_COLORS[theme];
       if (kind === "rain") {
         canvas.dataset.atmosphereRainSpeed = String(

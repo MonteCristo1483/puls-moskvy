@@ -26,14 +26,14 @@ export function rainSpeedPx(windMs: number, unit = 1): number {
   return base + streamSpeedPx(windMs) * 0.35;
 }
 
-/** Длина штриха растёт с силой ветра: 6 px в штиль, ~20 px при 10 м/с. */
+/** Длина штриха растёт с силой ветра: 14 px в штиль, ~60 px при 10 м/с. */
 export function rainStreakLengthPx(windMs: number): number {
-  return Math.round((6 + streamSpeedPx(windMs) * 0.16) * 10) / 10;
+  return Math.min(64, Math.round((14 + streamSpeedPx(windMs) * 0.55) * 10) / 10);
 }
 
-/** Плотность дождя: на 390×844 — 286 капель (приёмка требует ≥ 250). */
+/** Плотность дождя: на 390×844 — 766 капель (приёмка требует ≥ 250). */
 export function rainCount(width: number, height: number): number {
-  return Math.max(0, Math.round((width * height) / 1150));
+  return Math.min(950, Math.round((width * height) / 430));
 }
 
 export type RainDrop = {
@@ -61,7 +61,7 @@ export function createRain(options: {
       y: rand() * height,
       speed: rainSpeedPx(windMs, rand()),
       length: rainStreakLengthPx(windMs),
-      alpha: 0.25 + rand() * 0.45,
+      alpha: 0.3 + rand() * 0.45,
     });
   }
   return drops;
@@ -102,9 +102,9 @@ export function snowSpeedPx(unit = 1): number {
   );
 }
 
-/** Плотность снега: на 390×844 — 164 снежинки (приёмка требует ≥ 150). */
+/** Плотность снега: на 390×844 — 700 снежинок (приёмка требует ≥ 400). */
 export function snowCount(width: number, height: number): number {
-  return Math.max(0, Math.round((width * height) / 2000));
+  return Math.min(800, Math.round((width * height) / 470));
 }
 
 export type SnowFlake = {
@@ -133,8 +133,8 @@ export function createSnow(options: {
       speed: snowSpeedPx(rand()),
       swayPhase: rand() * Math.PI * 2,
       swaySpeed: 0.5 + rand() * 0.9,
-      radius: 1.4 + rand() * 1.8,
-      alpha: 0.3 + rand() * 0.4,
+      radius: 1.2 + rand() * 1.4,
+      alpha: 0.5 + rand() * 0.45,
     });
   }
   return flakes;
@@ -160,7 +160,10 @@ export function snowSwayPx(flake: SnowFlake, timeSec: number): number {
 
 // ── Туман ────────────────────────────────────────────────────────────────
 
-export const FOG_ALPHA_MAX = 0.25;
+export const FOG_ALPHA_MIN = 0.22;
+export const FOG_ALPHA_MAX = 0.4;
+export const FOG_MIN_PUFFS = 6;
+export const FOG_MAX_PUFFS = 9;
 export const FOG_DRIFT_PX_PER_S = 8;
 
 export type FogPuff = {
@@ -173,7 +176,10 @@ export type FogPuff = {
 
 /** Туман — крупные медленные клочья; осадками не считается. */
 export function fogCount(width: number, height: number): number {
-  return Math.max(8, Math.round((width * height) / 26_000));
+  return Math.min(
+    FOG_MAX_PUFFS,
+    Math.max(FOG_MIN_PUFFS, Math.round((width * height) / 33_000)),
+  );
 }
 
 export function createFog(options: {
@@ -188,11 +194,10 @@ export function createFog(options: {
     puffs.push({
       x: rand() * width,
       y: rand() * height,
-      radius: 60 + rand() * 90,
-      // Альфа каждого клочья ≤ 0,25; на перекрытиях туман всё равно мягкий.
-      alpha: 0.08 + rand() * (FOG_ALPHA_MAX - 0.08),
-      phase: rand() * Math.PI * 2,
-    });
+      // Крупные клочья: 60–140 px — туман, а не точки.
+      radius: 60 + rand() * 80,
+      alpha: FOG_ALPHA_MIN + rand() * (FOG_ALPHA_MAX - FOG_ALPHA_MIN),
+      phase: rand() * Math.PI * 2,    });
   }
   return puffs;
 }

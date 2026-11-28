@@ -11,10 +11,10 @@ export const DUST_COLORS: Record<Theme, string> = {
 
 /** Больше шести очагов в кадре — каша; берём ближайшие к центру. */
 export const DUST_MAX_SOURCES = 6;
-export const DUST_TRAIL_MIN_POINTS = 10;
-export const DUST_TRAIL_MAX_POINTS = 18;
-export const DUST_ALPHA_MIN = 0.25;
-export const DUST_ALPHA_MAX = 0.7;
+export const DUST_TRAIL_MIN_POINTS = 12;
+export const DUST_TRAIL_MAX_POINTS = 20;
+export const DUST_ALPHA_MIN = 0.35;
+export const DUST_ALPHA_MAX = 0.8;
 
 export type DustPoint = {
   x: number;
@@ -40,8 +40,8 @@ export type DustTrailOptions = {
 };
 
 /**
- * Шлейф из 10–18 точек: каждая следующая дальше по ветру от очага, альфа
- * гаснет к концу (0,7 → 0,25). Лёгкое покачивание поперёк делает шлейф живым,
+ * Шлейф из 12–20 точек: каждая следующая дальше по ветру от очага, альфа
+ * гаснет к концу (0,8 → 0,35). Лёгкое покачивание поперёк делает шлейф живым,
  * но центробежность остаётся строго по азимуту ветра.
  */
 export function dustTrail(options: DustTrailOptions): DustTrail {

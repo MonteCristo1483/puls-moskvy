@@ -3,6 +3,8 @@
 // Коды Open-Meteo: 0–1 ясно, 45/48 туман, 51–67 морось и дождь, 71–77 снег,
 // 80–82 ливни, 85–86 снежные заряды. Отдельно решаем дождь или снег по
 // температуре: одна и та же морось при −3 °C — это снег.
+import type { Theme } from "../theme";
+
 export type SkyKind = "clear" | "rain" | "snow" | "fog";
 
 const FOG_CODES = new Set([45, 48]);
@@ -21,6 +23,24 @@ export const STREAM_OPACITY: Record<SkyKind, number> = {
   snow: 0.3,
   fog: 0,
 };
+
+/**
+ * Цвет туманной дымки: почти белый днём и прохладный светлый ночью. Туман —
+ * это видимость, а не заливка: держим альфы низкими, карта остаётся читаемой.
+ */
+export const FOG_COLOR: Record<Theme, string> = {
+  light: "#f4f8fb",
+  dark: "#b7c4d3",
+};
+
+/** Цвет штрихов дождя: достаточно контрастный к пастельной карте. */
+export const RAIN_COLOR: Record<Theme, string> = {
+  light: "#3b8fc4",
+  dark: "#8fc4e8",
+};
+
+/** Общая вуаль снизу вверх: не больше 0,12, иначе кадр «засвечен». */
+export const FOG_VEIL_ALPHA = 0.12;
 
 /** Осадки рисуем только в этих состояниях. */
 export function hasPrecipitation(kind: SkyKind): boolean {

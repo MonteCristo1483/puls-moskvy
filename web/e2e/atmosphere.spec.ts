@@ -45,6 +45,7 @@ type MockWeather = {
   temperature?: number;
   wind?: number;
   direction?: number;
+  precipitation?: number;
 };
 
 async function mockWeather(
@@ -60,7 +61,7 @@ async function mockWeather(
       temperature_2m: options.temperature ?? 3.2,
       wind_speed_10m: options.wind ?? 6,
       wind_direction_10m: options.direction ?? 210,
-      precipitation: 0.4,
+      precipitation: options.precipitation ?? 0.4,
       weather_code: options.code,
     },
   };
@@ -139,6 +140,160 @@ async function openAtmosphere(page: Page, options: MockWeather = {}) {
     )
     .toBeGreaterThan(0);
   return canvas;
+}
+
+/**
+ * Кадр состояния при одной камере, теме и времени (как в D4): ждём, пока
+ * карта и тайлы устоятся, затем снимаем весь экран.
+ */
+async function skyShot(page: Page, options: MockWeather): Promise<Buffer> {
+  await page.setViewportSize({ width: 390, height: 844 });
+  // Кадры снимаем в reduce-режиме: слой рисует один детерминированный кадр,
+  // поэтому MAD меряет состояние неба, а не случайную фазу анимации.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.unroute(API).catch(() => {});
+  await mockWeather(page, options);
+  await page.goto("./?theme=light");
+  await expect(page.locator('[data-atmosphere="1"]')).toBeVisible();
+  await page
+    .waitForFunction(
+      () => {
+        const map = (
+          window as unknown as {
+            __map?: { loaded?: () => boolean; areTilesLoaded?: () => boolean };
+          }
+        ).__map;
+        return Boolean(
+          map && map.loaded?.() && map.areTilesLoaded?.(),
+        );
+      },
+      { timeout: 25_000 },
+    )
+    .catch(() => {});
+  await expect(page.locator(".bg-splash")).toHaveCount(0);
+  await page.waitForTimeout(800);
+  return page.screenshot({ fullPage: false });
+}
+
+/**
+ * MAD двух кадров (средняя абсолютная разница по каналам, 0–255) и средняя
+ * яркость. Считаем в canvas страницы — без новых зависимостей. Сравниваем
+ * «зону карты» (без панелей и плашек), а яркость проверяем по всему кадру.
+ */
+type FrameStats = {
+  mad: number;
+  meanFirst: number;
+  meanSecond: number;
+  madFull: number;
+  meanFirstFull: number;
+  meanSecondFull: number;
+};
+
+const MAP_ZONE = { x: 175, y: 120, width: 200, height: 460 };
+
+async function frameDiff(
+  page: Page,
+  first: Buffer,
+  second: Buffer,
+): Promise<FrameStats> {
+  return page.evaluate(
+    async ({ firstData, secondData, zone }) => {
+      const load = (source: string) =>
+        new Promise<HTMLImageElement>((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = reject;
+          image.src = source;
+        });
+      const [a, b] = await Promise.all([load(firstData), load(secondData)]);
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) {
+        return {
+          mad: 0,
+          meanFirst: 0,
+          meanSecond: 0,
+          madFull: 0,
+          meanFirstFull: 0,
+          meanSecondFull: 0,
+        };
+      }
+
+      const measure = (
+        sourceA: HTMLImageElement,
+        sourceB: HTMLImageElement,
+        area: { x: number; y: number; width: number; height: number },
+      ) => {
+        canvas.width = area.width;
+        canvas.height = area.height;
+        ctx.drawImage(
+          sourceA,
+          area.x,
+          area.y,
+          area.width,
+          area.height,
+          0,
+          0,
+          area.width,
+          area.height,
+        );
+        const pixelsA = ctx.getImageData(0, 0, area.width, area.height).data;
+        ctx.clearRect(0, 0, area.width, area.height);
+        ctx.drawImage(
+          sourceB,
+          area.x,
+          area.y,
+          area.width,
+          area.height,
+          0,
+          0,
+          area.width,
+          area.height,
+        );
+        const pixelsB = ctx.getImageData(0, 0, area.width, area.height).data;
+        let diff = 0;
+        let sumA = 0;
+        let sumB = 0;
+        let count = 0;
+        for (let index = 0; index < pixelsA.length; index += 4) {
+          for (let channel = 0; channel < 3; channel += 1) {
+            diff += Math.abs(
+              pixelsA[index + channel] - pixelsB[index + channel],
+            );
+            sumA += pixelsA[index + channel];
+            sumB += pixelsB[index + channel];
+            count += 1;
+          }
+        }
+        return {
+          mad: diff / count,
+          meanFirst: sumA / count,
+          meanSecond: sumB / count,
+        };
+      };
+
+      const zoneStats = measure(a, b, zone);
+      const fullStats = measure(a, b, {
+        x: 0,
+        y: 0,
+        width: a.width,
+        height: a.height,
+      });
+      return {
+        mad: zoneStats.mad,
+        meanFirst: zoneStats.meanFirst,
+        meanSecond: zoneStats.meanSecond,
+        madFull: fullStats.mad,
+        meanFirstFull: fullStats.meanFirst,
+        meanSecondFull: fullStats.meanSecond,
+      };
+    },
+    {
+      firstData: `data:image/png;base64,${first.toString("base64")}`,
+      secondData: `data:image/png;base64,${second.toString("base64")}`,
+      zone: MAP_ZONE,
+    },
+  );
 }
 
 test("Атмосфера: скорость потока 12 + 7.5·v, азимут полёта обратен метео", () => {
@@ -294,11 +449,18 @@ test("Дождь: ≥250 капель, штрих строго по ветру, 
   expect(rainStreakLengthPx(10)).toBeGreaterThan(rainStreakLengthPx(0));
 });
 
-test("Снег: медленный (≤110 px/с), качается ±8 px, ≥150 снежинок", () => {
-  expect(snowCount(390, 844)).toBeGreaterThanOrEqual(150);
+test("Снег: медленный (≤110 px/с), качается ±8 px, ≥400 снежинок", () => {
+  expect(snowCount(390, 844)).toBeGreaterThanOrEqual(400);
   expect(snowSpeedPx(1)).toBeLessThanOrEqual(110);
   expect(snowSpeedPx(0)).toBeGreaterThanOrEqual(70);
   const flakes = createSnow({ width: 390, height: 844, rand: seededRandom(5) });
+  expect(flakes.length).toBeGreaterThanOrEqual(400);
+  for (const flake of flakes) {
+    expect(flake.radius).toBeGreaterThanOrEqual(1.2);
+    expect(flake.radius).toBeLessThanOrEqual(2.6);
+    expect(flake.alpha).toBeGreaterThanOrEqual(0.5);
+    expect(flake.alpha).toBeLessThanOrEqual(0.95);
+  }
   const flake = flakes[0];
   const swayA = snowSwayPx(flake, 0);
   const swayB = snowSwayPx(flake, 1.3);
@@ -307,12 +469,15 @@ test("Снег: медленный (≤110 px/с), качается ±8 px, ≥1
   expect(Math.abs(swayB)).toBeLessThanOrEqual(8);
 });
 
-test("Туман: альфа клочьев ≤ 0,25, осадков нет", () => {
+test("Туман: 6–9 клочьев радиусом 60–140 px, альфа 0,18–0,40", () => {
   const puffs = createFog({ width: 390, height: 844, rand: seededRandom(9) });
-  expect(puffs.length).toBeGreaterThan(0);
+  expect(puffs.length).toBeGreaterThanOrEqual(6);
+  expect(puffs.length).toBeLessThanOrEqual(9);
   for (const puff of puffs) {
-    expect(puff.alpha).toBeGreaterThan(0);
-    expect(puff.alpha).toBeLessThanOrEqual(0.25);
+    expect(puff.radius).toBeGreaterThanOrEqual(60);
+    expect(puff.radius).toBeLessThanOrEqual(140);
+    expect(puff.alpha).toBeGreaterThanOrEqual(0.18);
+    expect(puff.alpha).toBeLessThanOrEqual(0.4);
   }
 });
 
@@ -333,8 +498,8 @@ test("Пыль: ≤6 очагов, шлейф по ветру, цвет #ff6b52"
     rand: seededRandom(42),
     timeSec: 0,
   });
-  expect(trail.points.length).toBeGreaterThanOrEqual(10);
-  expect(trail.points.length).toBeLessThanOrEqual(18);
+  expect(trail.points.length).toBeGreaterThanOrEqual(12);
+  expect(trail.points.length).toBeLessThanOrEqual(20);
   for (const point of trail.points) {
     expect(point.alpha).toBeGreaterThanOrEqual(DUST_ALPHA_MIN - 0.001);
     expect(point.alpha).toBeLessThanOrEqual(DUST_ALPHA_MAX + 0.001);
@@ -449,7 +614,7 @@ test.describe("Атмосфера: поток частиц на карте", () 
     ).toBeLessThanOrEqual(0.3);
   });
 
-  test("снег: ≥150 частиц, падение ≤110 px/с", async ({ page }) => {
+  test("снег: ≥400 частиц, падение ≤110 px/с", async ({ page }) => {
     const canvas = await openAtmosphere(page, {
       code: 71,
       temperature: -3,
@@ -458,19 +623,26 @@ test.describe("Атмосфера: поток частиц на карте", () 
     await expect(canvas).toHaveAttribute("data-atmosphere-sky", "snow");
     expect(
       Number(await canvas.getAttribute("data-atmosphere-precip")),
-    ).toBeGreaterThanOrEqual(150);
+    ).toBeGreaterThanOrEqual(400);
     expect(
       Number(await canvas.getAttribute("data-atmosphere-snow-speed")),
     ).toBeLessThanOrEqual(110);
   });
 
-  test("туман: осадков 0, альфа дымки ≤0,25, струи гаснут", async ({ page }) => {
+  test("туман: осадков 0, 6–9 клочьев, альфа ≤0,40, струи гаснут", async ({
+    page,
+  }) => {
     const canvas = await openAtmosphere(page, { code: 45, wind: 3 });
     await expect(canvas).toHaveAttribute("data-atmosphere-sky", "fog");
     expect(Number(await canvas.getAttribute("data-atmosphere-precip"))).toBe(0);
+    const puffs = Number(
+      await canvas.getAttribute("data-atmosphere-fog-puffs"),
+    );
+    expect(puffs).toBeGreaterThanOrEqual(6);
+    expect(puffs).toBeLessThanOrEqual(9);
     expect(
       Number(await canvas.getAttribute("data-atmosphere-fog-alpha")),
-    ).toBeLessThanOrEqual(0.25);
+    ).toBeLessThanOrEqual(0.4);
     await page.waitForTimeout(600);
     expect(
       Number(await canvas.getAttribute("data-atmosphere-stream-opacity")),
@@ -484,6 +656,38 @@ test.describe("Атмосфера: поток частиц на карте", () 
     expect(
       Number(await canvas.getAttribute("data-atmosphere-streams")),
     ).toBeGreaterThanOrEqual(2);
+  });
+
+  test("кадр: туман виден — MAD ≥5, яркость растёт ≤18/255", async ({
+    page,
+  }) => {
+    const clear = await skyShot(page, { code: 0, precipitation: 0 });
+    const fog = await skyShot(page, { code: 45, precipitation: 0 });
+    const stats = await frameDiff(page, clear, fog);
+    console.log(`MAD fog ${JSON.stringify(stats)}`);
+    // Туман — видимость, а не засветка: кадр заметно отличается, но не белеет.
+    expect(stats.mad).toBeGreaterThanOrEqual(5);
+    expect(stats.meanSecondFull - stats.meanFirstFull).toBeLessThanOrEqual(18);
+  });
+
+  test("кадр: снег виден — MAD ≥4", async ({ page }) => {
+    const clear = await skyShot(page, { code: 0, precipitation: 0 });
+    const snow = await skyShot(page, {
+      code: 71,
+      temperature: -3,
+      precipitation: 0.4,
+    });
+    const stats = await frameDiff(page, clear, snow);
+    console.log(`MAD snow ${JSON.stringify(stats)}`);
+    expect(stats.mad).toBeGreaterThanOrEqual(4);
+  });
+
+  test("кадр: дождь виден — MAD ≥6", async ({ page }) => {
+    const clear = await skyShot(page, { code: 0, precipitation: 0 });
+    const rain = await skyShot(page, { code: 61, precipitation: 0.4 });
+    const stats = await frameDiff(page, clear, rain);
+    console.log(`MAD rain ${JSON.stringify(stats)}`);
+    expect(stats.mad).toBeGreaterThanOrEqual(6);
   });
 
   test("чип «Погода и ветер» выключает поток частиц вместе с плашкой", async ({
