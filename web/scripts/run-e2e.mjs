@@ -13,7 +13,10 @@ import { fileURLToPath } from "node:url";
 
 const WEB_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const DIST = join(WEB_ROOT, "dist");
-const PAGES_ROOT = join(WEB_ROOT, ".pages-test");
+// Свой каталог на каждый прогон: раньше прогоны делили `.pages-test` и
+// финальная уборка одного сносила файлы под ногами у другого — тесты падали
+// с ERR_CONNECTION_REFUSED посреди набора. Теперь каталог уникален по PID.
+const PAGES_ROOT = join(WEB_ROOT, `.pages-test-${process.pid}`);
 const SITE = join(PAGES_ROOT, "puls-moskvy");
 const PORT = Number(process.env.E2E_PORT ?? 4173);
 const BASE_URL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${PORT}/puls-moskvy/`;
@@ -62,12 +65,37 @@ async function main() {
   // ссылки /r/<id>/ ловит public/404.html. Генератор в прогоне не участвует.
   prepareLayout();
 
+  // Занятый порт — почти всегда живой сервер прошлого прогона. Если этого не
+  // заметить, новый сервер не сможет привязаться, `waitForServer` увидит
+  // ЧУЖОЙ сервер со старым содержимым, а тесты будут падать «на ровном месте».
+  // Лучше отказаться сразу и внятно, чем получить загадочный обрыв.
+  try {
+    const probe = await fetch(BASE_URL, { signal: AbortSignal.timeout(1500) });
+    if (probe.ok) {
+      console.error(
+        `Порт ${PORT} уже занят (${BASE_URL}) — вероятно, жив сервер прошлого прогона.\n` +
+          "Остановите его (или задайте другой E2E_PORT) и повторите.",
+      );
+      process.exitCode = 1;
+      rmSync(SITE, { recursive: true, force: true });
+      return;
+    }
+  } catch {
+    // никто не слушает — это то, что нам нужно
+  }
+
   const server = spawn(
     process.execPath,
     [join(WEB_ROOT, "scripts", "serve-test.mjs"), PAGES_ROOT, String(PORT)],
     { cwd: WEB_ROOT, stdio: ["ignore", "inherit", "inherit"] },
   );
   let serverExited = false;
+  // Ошибка привязки (EADDRINUSE) иначе превращается в необработанное событие
+  // и непонятное падение — печатаем причину.
+  server.once("error", (error) => {
+    serverExited = true;
+    console.error(`serve-test.mjs не запустился: ${error.message}`);
+  });
   server.once("exit", () => {
     serverExited = true;
   });

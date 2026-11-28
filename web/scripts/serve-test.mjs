@@ -159,4 +159,26 @@ server.on("clientError", (_error, socket) => {
   socket.destroy();
 });
 
+server.on("error", (error) => {
+  // Понятное сообщение вместо стека: занятый порт — единственная причина,
+  // по которой серверу действительно нельзя продолжать.
+  if (error.code === "EADDRINUSE") {
+    console.error(`порт ${port} занят — остановите прошлый сервер или задайте E2E_PORT`);
+    process.exit(1);
+  }
+  // Всё остальное (в том числе разрывы соединений, которые Node иногда
+  // присылает как 'error' сервера) не должно убивать тестовый дубль:
+  // иначе падает весь набор, а причина выглядит как ERR_CONNECTION_REFUSED.
+  console.error(`[serve-test] ошибка сервера (продолжаем): ${error.message}`);
+});
+
+// Тестовый дубль не имеет права умереть от одной кривой загрузки: логируем
+// и продолжаем слушать. Без этого один обрыв рвал весь прогон.
+process.on("uncaughtException", (error) => {
+  console.error(`[serve-test] uncaughtException: ${error?.message ?? error}`);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error(`[serve-test] unhandledRejection: ${reason?.message ?? reason}`);
+});
+
 server.listen(port, () => console.log(`serving ${root} on http://localhost:${port}`));
