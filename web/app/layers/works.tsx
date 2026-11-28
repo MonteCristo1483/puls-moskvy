@@ -4,6 +4,7 @@ import WorkCard from "../work-card";
 import { WORKS_PAINT } from "../map/palette";
 import type { Theme } from "../theme";
 import type { LayerPlugin } from "./contract";
+import type { FactsSnapshot } from "./facts-store";
 import {
   closeWork,
   loadWorks,
@@ -24,6 +25,8 @@ import {
 const RETRY_MS = 250;
 const MAX_ATTEMPTS = 320; // 80 с: PMTiles и тайлы грузятся долго, но не бесконечно
 
+const WORKS_LABEL = "Стройки и работы";
+
 const LINE_LAYER = "works-line";
 const FILL_LAYER = "works-fill";
 const POINT_LAYER = "works-point";
@@ -35,6 +38,34 @@ const EMPTY: FeatureCollection<Geometry, WorkProperties> = {
 
 function sourceData(data: WorksData | null): FeatureCollection<Geometry, WorkProperties> {
   return data?.collection ?? EMPTY;
+}
+
+/**
+ * S9: слой работ живёт только на живых фактах. Пока `meta.json` грузится,
+ * считаем слой доступным (иначе чип и карточка мигали бы при каждой загрузке);
+ * скрываем, только когда состояние известно и данные устарели/отсутствуют.
+ *
+ * Причина пишется в консоль **один раз на переход** «доступен → скрыт», а не
+ * на каждый рендер: `available` зовут и хост, и панель. Повторная запись
+ * появится лишь после возврата данных (например, после повторной загрузки).
+ */
+let warnedHidden = false;
+
+function worksAvailable(facts: FactsSnapshot): boolean {
+  if (facts.status === "loading") return true;
+  if (!facts.stale) {
+    warnedHidden = false;
+    return true;
+  }
+  if (!warnedHidden) {
+    warnedHidden = true;
+    const reason =
+      facts.meta === null
+        ? "meta.json не найден"
+        : `данные старше 24 ч (generated_at ${facts.generated ?? "неизвестно"})`;
+    console.warn(`[S9] слой «${WORKS_LABEL}» скрыт: ${reason}`);
+  }
+  return false;
 }
 
 /** Цвета WebGL не читают CSS-переменные — берём их из палитры тем. */
@@ -114,9 +145,12 @@ function removeLayers(map: MapLibreMap): void {
 /** Карта создаётся асинхронно; слой ждёт её и готовность стиля опросом. */
 export const worksLayer: LayerPlugin = {
   id: "works",
-  label: "Стройки и работы",
+  label: WORKS_LABEL,
   defaultVisible: false,
   visibilityKey: "works",
+  available(context) {
+    return worksAvailable(context.facts.get());
+  },
   mount(context) {
     let cancelled = false;
     let timer: number | null = null;
@@ -218,10 +252,15 @@ export const worksLayer: LayerPlugin = {
  * Карточка объекта — отдельный слой без чипа: она должна открываться по
  * `?work=<id>` и при выключенном слое (4109 объектов по умолчанию не грузим).
  * Видимостью управляет URL, а не панель слоёв, поэтому `defaultVisible: true`.
+ * S9: без живых фактов карточка не монтируется вовсе — deep link `?work=` не
+ * открывает объект, о котором нечего честно сказать.
  */
 export const worksCardLayer: LayerPlugin = {
   id: "works-card",
   label: "Карточка объекта",
   defaultVisible: true,
+  available(context) {
+    return worksAvailable(context.facts.get());
+  },
   View: ({ context }) => <WorkCard facts={context.facts} getMap={context.getMap} />,
 };

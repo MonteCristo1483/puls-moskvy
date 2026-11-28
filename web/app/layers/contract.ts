@@ -70,6 +70,13 @@ export type LayerPlugin = {
   readonly defaultVisible: boolean;
   /** Ключ чипа в панели слоёв; undefined — чипа нет (факты). */
   readonly visibilityKey?: LayerKey;
+  /**
+   * S9: можно ли показывать слой. `false` — данных нет или они устарели:
+   * хост не монтирует слой (и снимает уже смонтированный), панель прячет чип.
+   * Пока факты загружаются (`status === "loading"`), слой считается доступным,
+   * иначе чип мигал бы на каждой загрузке.
+   */
+  available?(context: LayerContext): boolean;
   /** Подключение: источники, слои карты, слушатели. */
   mount?(context: LayerContext): LayerHandle | void;
   /** Освобождение ресурсов, не привязанных к дескриптору. */

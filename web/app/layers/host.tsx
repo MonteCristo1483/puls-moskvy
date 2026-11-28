@@ -5,13 +5,14 @@
 // плагинов `mount`/`unmount` и `on*`-хуки и рендерит `View` видимых слоёв.
 // Плашки и панели слоёв остаются абсолютно позиционированными относительно
 // карты: обёртка `contents` не создаёт бокс и не меняет геометрию.
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type { Visibility } from "../layers-panel";
 import { moscowClockMinutes } from "../solar";
 import type { Theme } from "../theme";
+import { layerAvailable } from "./availability";
 import type { LayerContext, LayerPlugin } from "./contract";
-import { factsStore } from "./facts-store";
+import { factsStore, initialFacts } from "./facts-store";
 import { LAYERS } from "./registry";
 import { weatherStore } from "./weather-store";
 
@@ -85,6 +86,15 @@ export default function LayerHost({
     [theme, minutes],
   );
 
+  // S9: доступность зависит от фактов, а не от видимости чипа. Подписка на
+  // store перерисовывает хост, когда `meta.json` догрузился; если слой стал
+  // недоступен, слот исчезает и его `mount`-cleanup снимает источники/слои.
+  const facts = useSyncExternalStore(
+    factsStore.subscribe,
+    factsStore.get,
+    () => initialFacts,
+  );
+
   return (
     <div className="contents">
       {LAYERS.map((layer) => {
@@ -92,6 +102,7 @@ export default function LayerHost({
           ? visible[layer.visibilityKey]
           : layer.defaultVisible;
         if (!shown) return null;
+        if (!layerAvailable(layer, facts)) return null;
         return <LayerSlot key={layer.id} layer={layer} context={context} />;
       })}
     </div>

@@ -1,13 +1,15 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { mockFreshMeta, mskClock } from "./live-meta";
 
 // S7: слой «Стройки и работы» и карточка объекта (набор 2855 data.mos.ru).
 //
 // Тест 10 случайных карточек берёт объекты прямо из `public/live/works.geojson`
-// детерминированным перемешиванием (mulberry32 на фиксированном зерне), а
-// ожидаемую дату данных форматирует из `public/live/meta.json` в МСК — так
-// проверка не зависит от «сегодня» и не ходит в сеть.
+// детерминированным перемешиванием (mulberry32 на фиксированном зерне). Дату
+// данных задаёт `mockFreshMeta` (S9): фиксированная дата в `public/live/meta.json`
+// через сутки стала бы устаревшей, и слой работ законно исчез бы — тест упал бы
+// по календарю, а не по коду.
 
 type RawFeature = {
   properties?: { global_id?: number | string | null };
@@ -73,15 +75,10 @@ function haversine(a: LonLat, b: LonLat): number {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-type LiveMeta = { generated_at?: string };
-
 const WEB_ROOT = process.cwd();
 const works = JSON.parse(
   readFileSync(join(WEB_ROOT, "public/live/works.geojson"), "utf8"),
 ) as { features: RawFeature[] };
-const meta = JSON.parse(
-  readFileSync(join(WEB_ROOT, "public/live/meta.json"), "utf8"),
-) as LiveMeta;
 
 /** Deep link: объект в центре (Тверская) — рядом есть жилой дом для теста. */
 const DEEP_ID = "2786812938";
@@ -94,21 +91,6 @@ if (!DEEP_CENTROID) throw new Error(`у объекта ${DEEP_ID} нет гео�
 
 /** Жилой дом рядом с объектом: «Тверская улица, 12 с6» (~46 м). */
 const HOME = { id: 105773714, lng: 37.608509, lat: 55.763475 };
-
-/** «27.11 19:22» — та же дата данных в МСК, что показывает карточка. */
-function mskClock(iso: string | undefined): string {
-  if (!iso) throw new Error("в meta.json нет generated_at");
-  const parts = new Intl.DateTimeFormat("ru-RU", {
-    timeZone: "Europe/Moscow",
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(Date.parse(iso)));
-  const pick = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return `${pick("day")}.${pick("month")} ${pick("hour")}:${pick("minute")}`;
-}
 
 /** Детерминированное перемешивание: 10 разных объектов на каждом прогоне — те же. */
 function pickWorkIds(count: number): string[] {
@@ -320,7 +302,7 @@ async function loadSearchIndex(page: Page) {
 test("S7: 10 случайных карточек — источник и дата в шапке, без повторов", async ({ page }) => {
   test.setTimeout(300_000);
   const ids = pickWorkIds(10);
-  const clock = mskClock(meta.generated_at);
+  const clock = mskClock(await mockFreshMeta(page));
   const seen: string[] = [];
 
   for (const id of ids) {
@@ -353,6 +335,7 @@ test("S7: чип «Стройки и работы» выключен по умо
   page,
 }) => {
   test.setTimeout(120_000);
+  await mockFreshMeta(page);
   await page.goto("./");
   const chip = page.getByRole("button", { name: "Стройки и работы" });
   await expect(chip).toBeVisible();
@@ -381,6 +364,7 @@ test("S7: клик по объекту открывает карточку и п
   page,
 }) => {
   test.setTimeout(120_000);
+  await mockFreshMeta(page);
   await page.goto("./");
   const chip = page.getByRole("button", { name: "Стройки и работы" });
   await chip.click();
@@ -409,6 +393,7 @@ test("S7: клик по объекту открывает карточку и п
 
 test("S7: deep link ?work= включает слой и ставит камеру на объект", async ({ page }) => {
   test.setTimeout(120_000);
+  await mockFreshMeta(page);
   await page.goto(`./?work=${DEEP_ID}`);
   const card = page.locator("[data-work-card]");
   await expect(card).toBeVisible({ timeout: 20_000 });
@@ -436,6 +421,7 @@ test("S7: deep link ?work= включает слой и ставит камер�
 
 test("S7: одновременно открыта одна карточка — дом или работы", async ({ page }) => {
   test.setTimeout(180_000);
+  await mockFreshMeta(page);
   await page.goto(`./?work=${DEEP_ID}`);
   const card = page.locator("[data-work-card]");
   await expect(card).toBeVisible({ timeout: 20_000 });
