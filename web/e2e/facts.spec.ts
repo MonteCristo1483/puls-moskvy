@@ -107,7 +107,9 @@ test("Факты: данные старше 24 ч → «Данные устар�
 
   await page.goto("./");
   const badge = page.locator("[data-facts-badge]");
-  await expect(badge).toHaveAttribute("data-facts-status", "missing");
+  // Данные старые, но файл есть — `stale`; `missing` означал бы, что файла
+  // нет (это соседний тест выше).
+  await expect(badge).toHaveAttribute("data-facts-status", "stale");
   await expect(badge).toContainText(`Данные устарели · ${mskClock(old)}`);
   await expect(badge).toHaveAttribute("data-facts-time", old);
 });

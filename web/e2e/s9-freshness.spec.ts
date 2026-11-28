@@ -6,10 +6,11 @@ import { mockFreshMeta, mockMissingMeta, mockStaleMeta, mskClock } from "./live-
 // S9: «нет данных — нет слоя». Свежесть фактов задаётся моком `live/meta.json`,
 // поэтому тест проверяет правило, а не календарь репозитория:
 //   • устаревшие данные (>24 ч) → нет чипа, нет слоя/источника на карте, deep
-//     link `?work=` не открывает карточку, бейдж говорит «устарел», в консоли
-//     ровно одна запись `[S9]`;
-//   • свежие данные → чип и слой на месте, бейдж показывает дату без «устарел»;
-//   • meta.json нет → чипа нет, бейдж «нет данных».
+//     link `?work=` не открывает карточку, бейдж говорит «устарел»
+//     (`data-facts-status="stale"`), в консоли ровно одна запись `[S9]`;
+//   • свежие данные → чип и слой на месте, бейдж показывает дату без «устарел»
+//     (`data-facts-status="ok"`);
+//   • meta.json нет → чипа нет, бейдж «нет данных» (`data-facts-status="missing"`).
 
 type BrowserMap = {
   getLayer(id: string): unknown;
@@ -79,7 +80,10 @@ test("S9: устаревшие данные — чипа, слоя и карто
   await page.goto(`./?work=${REAL_ID}`);
 
   const badge = page.locator("[data-facts-badge]");
-  await expect(badge).toHaveAttribute("data-facts-status", "missing");
+  // Файл есть, просто данные старые: машинный статус — `stale`, а не
+  // `missing`. «Данных нет» и «данные устарели» — разные состояния; случай
+  // `missing` проверяет третий тест этого файла.
+  await expect(badge).toHaveAttribute("data-facts-status", "stale");
   await expect(badge).toContainText("устарел");
 
   await expect(
@@ -176,6 +180,8 @@ test("S9: meta.json нет — чипа нет, бейдж «нет данных
     page.getByRole("button", { name: "Стройки и работы" }),
   ).toHaveCount(0);
   const badge = page.locator("[data-facts-badge]");
+  // Файла нет вовсе — именно `missing` (а не `stale`): это и фиксирует
+  // различие двух состояний в машинном признаке.
   await expect(badge).toHaveAttribute("data-facts-status", "missing");
   await expect(badge).toContainText("нет данных");
 
