@@ -7,6 +7,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import AboutData from "./about-data";
 import BuildingSheet from "./building-sheet";
 import type { BuildingBreakdown, SelectedBuilding } from "./building-sheet";
+import { useNearbyRows } from "./nearby-store";
 import LayerHost from "./layers/host";
 import LayersPanel, { DEFAULT_VISIBILITY } from "./layers-panel";
 import type { Visibility } from "./layers-panel";
@@ -99,6 +100,9 @@ export default function Map() {
     Record<string, Promise<Record<string, IsochroneData> | null>>
   >({});
   const districtByBuildingRef = useRef<Record<number, number>>({});
+  // S8: строки «Рядом» выбранного дома. Загрузка POI и кэши — в nearby-store,
+  // здесь только вызов: map.tsx остаётся оркестратором.
+  const nearby = useNearbyRows(selected?.id ?? null, districtByBuildingRef);
   const isoGeomRef = useRef<IsoGeometry | null>(null);
   const setIsoSourceRef = useRef<((geom: IsoGeometry | null) => void) | null>(null);
   const noticeTimerRef = useRef<number | null>(null);
@@ -417,6 +421,7 @@ export default function Map() {
       />
       <BuildingSheet
         building={selected}
+        nearby={nearby}
         onClose={() => deselectRef.current?.()}
         contour={contour}
         onContourChange={setContour}
