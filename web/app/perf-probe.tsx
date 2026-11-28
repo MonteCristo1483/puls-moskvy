@@ -180,7 +180,7 @@ export default function PerfProbe() {
 
   if (!report) {
     return (
-      <div className="pointer-events-none fixed bottom-3 left-1/2 z-[60] -translate-x-1/2 rounded-full bg-slate-900/85 px-4 py-2 text-xs text-white shadow-lg">
+      <div className="pointer-events-none fixed bottom-[13.4rem] left-1/2 z-[60] -translate-x-1/2 rounded-full bg-slate-900/85 px-4 py-2 text-xs text-white shadow-lg">
         Замер S14 · {phase}
       </div>
     );
@@ -203,7 +203,10 @@ export default function PerfProbe() {
   ];
 
   return (
-    <div className="fixed inset-x-2 bottom-2 z-[60] rounded-2xl bg-slate-900/95 p-3 text-white shadow-2xl">
+    <div
+      data-perf-panel="1"
+      className="fixed inset-x-2 bottom-[13.4rem] z-[60] max-h-[38dvh] overflow-y-auto rounded-2xl bg-slate-900/95 p-3 text-white shadow-2xl"
+    >
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-sm font-semibold">Замер S14 · это устройство</span>
         <button
