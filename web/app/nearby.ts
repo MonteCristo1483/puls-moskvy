@@ -32,6 +32,15 @@ export const NEARBY_POI_TYPES: Record<string, readonly string[]> = {
   shops: ["shop"],
 };
 
+/** Подписи категорий — единственный источник: шторка и store берут их отсюда. */
+export const NEARBY_LABELS: Record<string, string> = {
+  transport: "Транспорт",
+  schools: "Школы",
+  parks: "Парки",
+  kindergartens: "Детские сады",
+  shops: "Магазины",
+};
+
 export type LonLat = [number, number];
 
 /** Строка блока «Рядом». distanceM = null — данных по категории нет. */

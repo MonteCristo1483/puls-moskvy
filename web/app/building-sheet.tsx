@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChipButton } from "./design";
 import { SCORE_COLORS } from "./map/palette";
 import { NEARBY_RADIUS_M, filterWithinRadius } from "./nearby";
+import { NEARBY_LABELS } from "./nearby";
 import type { NearbyRow } from "./nearby";
 
 export type BonusEntry = {
@@ -51,13 +52,7 @@ export type SelectedBuilding = {
 };
 
 // Подписи категорий; строки «Рядом» строятся этими же подписями.
-export const BONUS_LABELS: Record<string, string> = {
-  transport: "Транспорт",
-  schools: "Школы",
-  parks: "Парки",
-  kindergartens: "Детские сады",
-  shops: "Магазины",
-};
+const BONUS_LABELS = NEARBY_LABELS;
 
 const PENALTY_LABELS: Record<string, string> = {
   road: "Магистраль",
