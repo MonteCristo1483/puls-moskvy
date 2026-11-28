@@ -180,7 +180,7 @@ export default function PerfProbe() {
 
   if (!report) {
     return (
-      <div className="pointer-events-none fixed bottom-3 left-1/2 z-[60] -translate-x-1/2 rounded-full bg-slate-900/85 px-4 py-2 text-xs text-white shadow-lg">
+      <div className="pointer-events-none fixed bottom-[14rem] left-1/2 z-[60] -translate-x-1/2 rounded-full bg-slate-900/85 px-4 py-2 text-xs text-white shadow-lg">
         Замер S14 · {phase}
       </div>
     );
@@ -190,7 +190,9 @@ export default function PerfProbe() {
   const rows: Array<[string, string, boolean | null]> = [
     ["LCP", ms(report.lcp), report.lcp !== null ? report.lcp <= 2500 : null],
     ["fps карты", report.fps === null ? "—" : `${report.fps.toFixed(1)}`, report.fps !== null ? report.fps >= 30 : null],
-    ["JS", report.jsKb === null ? "—" : `${report.jsKb} КБ`, report.jsKb !== null ? report.jsKb <= 300 : null],
+    // S14: бюджет пересогласован 28.11 — потолок на весь JS 700 КБ, свой код
+    // считается отдельно от движка карты (см. docs/DECISIONS.md).
+    ["JS", report.jsKb === null ? "—" : `${report.jsKb} КБ`, report.jsKb !== null ? report.jsKb <= 700 : null],
     ["худший кадр", ms(report.worstMs), null],
     ["p95 кадра", ms(report.p95Ms), null],
     ["FCP", ms(report.fcp), null],
@@ -203,8 +205,11 @@ export default function PerfProbe() {
   ];
 
   return (
-    <div className="fixed inset-x-2 bottom-2 z-[60] rounded-2xl bg-slate-900/95 p-3 text-white shadow-2xl">
-      <div className="mb-2 flex items-center justify-between gap-2">
+    <div
+      data-perf-panel="1"
+      className="fixed inset-x-2 bottom-[14rem] z-[60] max-h-[38dvh] overflow-y-auto rounded-2xl bg-slate-900/95 px-3 py-2.5 text-white shadow-2xl"
+    >
+      <div className="mb-1.5 flex items-center justify-between gap-2">
         <span className="text-sm font-semibold">Замер S14 · это устройство</span>
         <button
           type="button"
@@ -230,8 +235,9 @@ export default function PerfProbe() {
           ))}
         </dl>
       )}
-      <p className="mt-2 text-[11px] leading-snug text-white/55">
-        Бюджет: LCP &lt; 2500 мс, JS &lt; 300 КБ, карта &gt; 30 fps. Сделайте скриншот экрана.
+      <p className="mt-1.5 text-[11px] leading-snug text-white/55">
+        Бюджет: LCP &lt; 2500 мс, карта &gt; 30 fps, весь JS &lt; 700 КБ (свой код
+        считается отдельно от движка). Сделайте скриншот экрана.
       </p>
     </div>
   );
