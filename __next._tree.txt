@@ -1,4 +1,4 @@
 :HL["/puls-moskvy/_next/static/chunks/3rel_j0_i-far.css","style"]
 :HL["/puls-moskvy/_next/static/chunks/2ddmrojwgxvfe.css","style"]
 1:[["children",{"s":"__PAGE__","h":160}]]
-0:{"b":"NcZk6Cbq_BfSN-THdq-MW","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
+0:{"b":"NxtYvP6FaXIhrjpKhnV7p","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
