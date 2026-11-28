@@ -205,11 +205,6 @@ export const SHADOW_PAINT: Record<Theme, { color: string; opacity: number }> = {
 };
 
 /** Стрелки пыли над стройками: ядро и ореол иконки. */
-export const DUST_COLORS: Record<Theme, { core: string; halo: string }> = {
-  light: { core: "#b45309", halo: "rgba(255,255,255,0.9)" },
-  dark: { core: "#fbbf24", halo: "rgba(6,12,20,0.8)" },
-};
-
 /**
  * Слой «Стройки и работы» (S7): линии/полигоны/точки набора 2855. Цвет —
  * картографический (WebGL не понимает CSS-переменные), поэтому живёт в

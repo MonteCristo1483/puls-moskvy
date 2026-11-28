@@ -47,6 +47,8 @@ export type StreamParticle = {
   driftAmp: number;
   /** Радиус точки, px. */
   radius: number;
+  /** Отход от оси следа, px: 0 у большинства, ±1…6 у «живых» точек. */
+  stray: number;
 };
 
 export type WindStream = {
@@ -56,8 +58,10 @@ export type WindStream = {
   offset: number;
   /** Длина кометы, px. */
   length: number;
-  /** Полуширина облака, px. */
+  /** Полуширина следа, px. */
   halfWidth: number;
+  /** Изгиб следа: смещение середины поперёк оси, px (−14…14). */
+  curve: number;
   particles: StreamParticle[];
 };
 
@@ -96,23 +100,29 @@ export function flowSpan(
   return Math.max(120, along + lengthPx + 80);
 }
 
-export function makeParticle(rand: RandomSource): StreamParticle {
-  // u равномерно вдоль следа: нить читается сплошной, а «кометность» задаёт
-  // альфа-градиент (хвост тусклее, голова ярче), а не сгусток у головы.
-  const u = rand();
+export function makeParticle(
+  rand: RandomSource,
+  u: number,
+): StreamParticle {
   // Треугольное распределение в −1…1: облако не обрезано по краям.
   const cross = (rand() + rand() + rand()) / 1.5 - 1;
+  // 7,5 % точек уходят с оси на 1…6 px: след живой, но не «линейка».
+  const strayRoll = rand();
+  const stray =
+    strayRoll < 0.075
+      ? (rand() < 0.5 ? -1 : 1) * (1 + rand() * 5)
+      : 0;
   return {
     u,
     cross,
     driftPhase: rand() * TAU,
     driftSpeed: 0.3 + rand() * 0.55,
     // Дрейф лёгкий: вместе с полушириной следа он держит поперечный разброс
-    // в пределах 20 px — струя остаётся ниткой, а не облаком.
+    // основной массы точек в пределах 20 px — струя остаётся ниткой.
     driftAmp: 0.8 + rand() * 2.2,
-    // Точка крупнее прежней: при узком следе именно размер ядра и ореола
-    // делает нить читаемой на светлой карте.
-    radius: 1.6 + rand() * 1.4,
+    // Радиус с разбросом: 0,8–2,6 px, а не одинаковый бисер.
+    radius: 0.8 + rand() * 1.8,
+    stray,
   };
 }
 
@@ -151,11 +161,25 @@ export function createStreams(options: StreamOptions): WindStream[] {
     );
     // Узкий след: точки выстраиваются в нитку, а не размазываются облаком.
     const halfWidth = 8 + rand() * 8;
+    // Изгиб: середина следа уходит поперёк на 6–14 px, знак свой у каждой
+    // струи — след живой, но не зигзаг.
+    const curve = (6 + rand() * 8) * (rand() < 0.5 ? -1 : 1);
     // Плотность держим одинаковой: длиннее струя — больше точек в ней.
-    const particleCount = Math.round(length * 0.55 + 30);
+    // На больших экранах струя длиной под 1000 px дала бы 580 точек — это
+    // лишний миллион пикселей в кадре; кап держит мобильные числа как есть.
+    const particleCount = Math.min(
+      420,
+      Math.round(length * 0.55 + 30),
+    );
     const particles: StreamParticle[] = [];
     for (let pointIndex = 0; pointIndex < particleCount; pointIndex += 1) {
-      particles.push(makeParticle(rand));
+      // Шаг вдоль следа неровный (±35 % от среднего): плотность «дышит».
+      const spread = (rand() - 0.5) * 0.7;
+      const u = Math.min(
+        0.9995,
+        Math.max(0.0005, (pointIndex + 0.5 + spread) / particleCount),
+      );
+      particles.push(makeParticle(rand, u));
     }
     // Фазу выбираем так, чтобы тело струи пересекало экран: голова гуляет по
     // окну «от края экрана до края плюс длина следа». Случайный джиттер
@@ -170,6 +194,7 @@ export function createStreams(options: StreamOptions): WindStream[] {
       offset,
       length,
       halfWidth,
+      curve,
       particles,
     });
   }
@@ -207,6 +232,8 @@ export type StreamDot = {
   radius: number;
   /** 0 — хвост, 1 — голова: чем больше, тем ярче ядро. */
   heat: number;
+  /** Отход точки от оси следа, px (0 — точка на оси). */
+  stray: number;
 };
 
 /**
@@ -235,13 +262,16 @@ export function streamDots(
   const dots: StreamDot[] = [];
 
   for (const particle of stream.particles) {
-    // Облако сужается к хвосту и голове — тело струи, а не полоса.
+    // Облако сужается к хвосту и голове; дуга выгибает середину следа,
+    // случайный stray отводит отдельные точки — след не выглядит линейкой.
     const taper = Math.sin(Math.PI * particle.u) ** 0.7;
     const wave = Math.sin(timeSec * particle.driftSpeed + particle.driftPhase);
     const lateral =
       stream.offset +
+      stream.curve * Math.sin(Math.PI * particle.u) +
       particle.cross * stream.halfWidth * taper +
-      wave * particle.driftAmp;
+      wave * particle.driftAmp +
+      particle.stray;
     const along = -particle.u * stream.length + wave * particle.driftAmp * 0.35;
     const x = centerX + dirX * (head + along) + perpX * lateral;
     const y = centerY + dirY * (head + along) + perpY * lateral;
@@ -252,6 +282,7 @@ export function streamDots(
       y,
       radius: particle.radius,
       heat: particle.u,
+      stray: particle.stray,
     });
   }
   return dots;

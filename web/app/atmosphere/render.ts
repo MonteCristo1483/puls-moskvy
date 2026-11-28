@@ -1,6 +1,14 @@
 // Рисование потока частиц на canvas 2D. Отдельно от геометрии: здесь только
 // canvas-состояние и кисти, никакой React-логики.
 import type { Theme } from "../theme";
+import type { DustTrail } from "./dust";
+import {
+  flightVector,
+  snowSwayPx,
+  type FogPuff,
+  type RainDrop,
+  type SnowFlake,
+} from "./precip";
 import { streamDots, type WindStream } from "./streams";
 import type { AtmospherePalette } from "./wind";
 
@@ -17,6 +25,14 @@ const HEAD_SCALE = 1.6;
 /** Ступени альфы ядра: заливаем пачками, а не по одной точке. */
 const CORE_BUCKETS = 8;
 
+function rgba(hex: string, alpha: number): string {
+  const value = hex.replace("#", "");
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export type DrawFrameOptions = {
   ctx: CanvasRenderingContext2D;
   width: number;
@@ -30,6 +46,8 @@ export type DrawFrameOptions = {
   streams: readonly WindStream[];
   palette: AtmospherePalette;
   theme: Theme;
+  /** Прозрачность струй 0…1: осадки/туман гасят их без рывка. */
+  opacity?: number;
 };
 
 /**
@@ -41,9 +59,22 @@ export type DrawFrameOptions = {
  * пастельной карте, не превращаясь в яркие «лампочки».
  */
 export function drawAtmosphereFrame(options: DrawFrameOptions): number {
-  const { ctx, width, height, bearingDeg, span, timeSec, streams, palette, theme } =
-    options;
+  const {
+    ctx,
+    width,
+    height,
+    bearingDeg,
+    span,
+    timeSec,
+    streams,
+    palette,
+    theme,
+    opacity = 1,
+  } = options;
+  // Кадр всегда начинается с очистки: даже при нулевой прозрачности струй
+  // поверх лягут осадки/туман, а старые точки не должны остаться.
   ctx.clearRect(0, 0, width, height);
+  if (opacity <= 0.01) return 0;
   // Ночь — аддитивное свечение (частицы «светятся»); день — обычное
   // смешивание: на светлой карте additive выбеливает лазурь в белое.
   ctx.globalCompositeOperation = theme === "dark" ? "lighter" : "source-over";
@@ -57,7 +88,7 @@ export function drawAtmosphereFrame(options: DrawFrameOptions): number {
 
     // Свечение — одной пачкой на струю: альфа постоянная, поэтому путь
     // собираем целиком и заливаем один раз.
-    ctx.globalAlpha = GLOW_ALPHA;
+    ctx.globalAlpha = GLOW_ALPHA * opacity;
     ctx.beginPath();
     for (const dot of dots) {
       const radius = dot.radius * GLOW_SCALE;
@@ -74,8 +105,10 @@ export function drawAtmosphereFrame(options: DrawFrameOptions): number {
     }
     for (let bucket = 0; bucket < CORE_BUCKETS; bucket += 1) {
       ctx.globalAlpha =
-        CORE_ALPHA_MIN +
-        (CORE_ALPHA_MAX - CORE_ALPHA_MIN) * ((bucket + 0.5) / CORE_BUCKETS);
+        (CORE_ALPHA_MIN +
+          (CORE_ALPHA_MAX - CORE_ALPHA_MIN) *
+            ((bucket + 0.5) / CORE_BUCKETS)) *
+        opacity;
       ctx.beginPath();
       let hasPoints = false;
       for (const dot of dots) {
@@ -92,7 +125,7 @@ export function drawAtmosphereFrame(options: DrawFrameOptions): number {
     }
 
     // Голова кометы — крупнее и с максимальной альфой.
-    ctx.globalAlpha = CORE_ALPHA_MAX;
+    ctx.globalAlpha = CORE_ALPHA_MAX * opacity;
     ctx.beginPath();
     ctx.arc(head.x, head.y, head.radius * HEAD_SCALE, 0, TAU);
     ctx.fill();
@@ -101,4 +134,116 @@ export function drawAtmosphereFrame(options: DrawFrameOptions): number {
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
   return drawn;
+}
+
+/**
+ * Дождь: штрихи строго вдоль вектора ветра. Хвост штриха смотрит против
+ * движения, поэтому капля читается летящей по ветру. Альфу квантуем на
+ * ступени и рисуем пачками: сотни одиночных stroke в кадре дороже, чем
+ * восемь путей.
+ */
+export function drawRain(
+  ctx: CanvasRenderingContext2D,
+  drops: readonly RainDrop[],
+  bearingDeg: number,
+  color: string,
+  opacity: number,
+): void {
+  if (opacity <= 0.01 || drops.length === 0) return;
+  const { dx, dy } = flightVector(bearingDeg);
+  const buckets = 8;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.1;
+  ctx.lineCap = "round";
+  for (let bucket = 0; bucket < buckets; bucket += 1) {
+    const low = bucket / buckets;
+    const high = (bucket + 1) / buckets;
+    ctx.globalAlpha = ((low + high) / 2) * opacity;
+    ctx.beginPath();
+    let hasDrops = false;
+    for (const drop of drops) {
+      // drop.alpha лежит в 0,25…0,7 — нормируем в 0…1 для ступени.
+      const level = Math.min(0.999, Math.max(0, (drop.alpha - 0.25) / 0.45));
+      if (Math.floor(level * buckets) !== bucket) continue;
+      hasDrops = true;
+      ctx.moveTo(drop.x, drop.y);
+      ctx.lineTo(drop.x - dx * drop.length, drop.y - dy * drop.length);
+    }
+    if (hasDrops) ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** Снег: круглые медленные снежинки с покачиванием поперёк. */
+export function drawSnow(
+  ctx: CanvasRenderingContext2D,
+  flakes: readonly SnowFlake[],
+  color: string,
+  opacity: number,
+  timeSec: number,
+): void {
+  if (opacity <= 0.01 || flakes.length === 0) return;
+  ctx.fillStyle = color;
+  for (const flake of flakes) {
+    ctx.globalAlpha = flake.alpha * opacity;
+    ctx.beginPath();
+    ctx.arc(
+      flake.baseX + snowSwayPx(flake, timeSec),
+      flake.y,
+      flake.radius,
+      0,
+      TAU,
+    );
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** Туман: крупные мягкие клочья, ползут по ветру. */
+export function drawFog(
+  ctx: CanvasRenderingContext2D,
+  puffs: readonly FogPuff[],
+  color: string,
+  opacity: number,
+): void {
+  if (opacity <= 0.01 || puffs.length === 0) return;
+  for (const puff of puffs) {
+    const gradient = ctx.createRadialGradient(
+      puff.x,
+      puff.y,
+      0,
+      puff.x,
+      puff.y,
+      puff.radius,
+    );
+    gradient.addColorStop(0, rgba(color, puff.alpha * opacity));
+    gradient.addColorStop(1, rgba(color, 0));
+    ctx.fillStyle = gradient;
+    ctx.fillRect(
+      puff.x - puff.radius,
+      puff.y - puff.radius,
+      puff.radius * 2,
+      puff.radius * 2,
+    );
+  }
+}
+
+/** Пыль: красные точки шлейфа возле очага стройки. */
+export function drawDust(
+  ctx: CanvasRenderingContext2D,
+  trails: readonly DustTrail[],
+  color: string,
+  opacity: number,
+): void {
+  if (opacity <= 0.01 || trails.length === 0) return;
+  ctx.fillStyle = color;
+  for (const trail of trails) {
+    for (const point of trail.points) {
+      ctx.globalAlpha = point.alpha * opacity;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, point.radius, 0, TAU);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
 }

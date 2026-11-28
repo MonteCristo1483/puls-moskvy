@@ -11,15 +11,18 @@
 //
 // Пыль: вектор ветра из live-weather (тот же кэш, что у слоя погоды — запрос
 // не дублируется) над полигонами строек/пустырей из overlays.pmtiles
-// (source-layer redzones, kind=construction). Если полигонов в кадре нет —
-// стрелок нет, и это честно написано в плашке.
+// (source-layer redzones, kind=construction). Самих частиц здесь нет: очаги
+// уходят в общий store (atmosphere/dust-store), а шлейфы рисует canvas слоя
+// «Поток ветра». Если полигонов в кадре нет — пыли нет, и это честно написано
+// в плашке.
 import { useEffect, useRef, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
-import type { Feature, FeatureCollection, MultiPolygon, Point } from "geojson";
+import type { Feature, FeatureCollection, MultiPolygon } from "geojson";
 import { Pill } from "./design";
 import type { Theme } from "./theme";
 import { fetchWeather, weatherAt, type WeatherSnapshot, type WeatherValues } from "./live-weather";
-import { DUST_COLORS, SHADOW_PAINT } from "./map/palette";
+import { SHADOW_PAINT } from "./map/palette";
+import { dustStore } from "./atmosphere/dust-store";
 import {
   formatClock,
   moscowClockMinutes,
@@ -40,8 +43,6 @@ import {
 
 const SHADOW_SOURCE_ID = "shadows-ground";
 const SHADOW_LAYER_ID = "shadows-ground-fill";
-const DUST_SOURCE_ID = "shadows-dust";
-const DUST_LAYER_ID = "shadows-dust-arrows";
 
 const SHADOW_MIN_ZOOM = 13;
 const COMPUTE_MIN_ZOOM = 12.8;
@@ -50,9 +51,6 @@ const COMPUTE_MIN_ZOOM = 12.8;
 // постройки (сараи, гаражи), чья пятидесятиметровая тень не читается.
 const MAX_BUILDINGS = 600;
 const MOVE_DEBOUNCE_MS = 140;
-
-const DUST_PIXEL_RATIO = 2;
-const DUST_ICON_PX = 40;
 
 type ShadowStats = {
   status: "loading" | "ok" | "night" | "low" | "zoom";
@@ -127,60 +125,6 @@ function ringBounds(ring: Ring): {
   return { west, east, south, north };
 }
 
-/** Canvas-иконка стрелки пыли: остриё на север, поворот задаёт слой. */
-function makeDustArrowImage(theme: Theme): ImageData | null {
-  const canvas = document.createElement("canvas");
-  canvas.width = DUST_ICON_PX * DUST_PIXEL_RATIO;
-  canvas.height = DUST_ICON_PX * DUST_PIXEL_RATIO;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  ctx.scale(DUST_PIXEL_RATIO, DUST_PIXEL_RATIO);
-  const cx = DUST_ICON_PX / 2;
-  const cy = DUST_ICON_PX / 2;
-
-  const draw = (color: string, width: number) => {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    const top = cy - 11;
-    const bottom = cy + 11;
-    ctx.beginPath();
-    ctx.moveTo(cx, bottom);
-    ctx.lineTo(cx, top + 7);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx - 6.5, top + 8);
-    ctx.lineTo(cx, top);
-    ctx.lineTo(cx + 6.5, top + 8);
-    ctx.stroke();
-  };
-
-  draw(DUST_COLORS[theme].halo, 7.5);
-  draw(DUST_COLORS[theme].core, 3.4);
-  return ctx.getImageData(0, 0, canvas.width, canvas.height);
-}
-
-function dustImageName(theme: Theme): string {
-  return `shadows-dust-arrow-${theme}`;
-}
-
-function ensureDustImage(map: maplibregl.Map, theme: Theme): string {
-  const name = dustImageName(theme);
-  if (!map.hasImage(name)) {
-    const image = makeDustArrowImage(theme);
-    if (image) map.addImage(name, image, { pixelRatio: DUST_PIXEL_RATIO });
-  }
-  return name;
-}
-
-function firstSymbolLayerId(map: maplibregl.Map): string | undefined {
-  for (const layer of map.getStyle()?.layers ?? []) {
-    if (layer.type === "symbol" && layer.id !== DUST_LAYER_ID) return layer.id;
-  }
-  return undefined;
-}
-
 function shadowLayerSpec(theme: Theme): maplibregl.LayerSpecification {
   return {
     id: SHADOW_LAYER_ID,
@@ -192,36 +136,6 @@ function shadowLayerSpec(theme: Theme): maplibregl.LayerSpecification {
       "fill-opacity": SHADOW_PAINT[theme].opacity,
       "fill-antialias": true,
     },
-  };
-}
-
-function dustLayerSpec(icon: string): maplibregl.LayerSpecification {
-  return {
-    id: DUST_LAYER_ID,
-    type: "symbol",
-    source: DUST_SOURCE_ID,
-    layout: {
-      "icon-image": icon as never,
-      "icon-size": [
-        "interpolate",
-        ["linear"],
-        ["get", "speed"],
-        0,
-        0.62,
-        4,
-        0.8,
-        8,
-        0.98,
-        14,
-        1.15,
-      ] as never,
-      "icon-rotate": ["get", "rotate"] as never,
-      "icon-rotation-alignment": "map",
-      "icon-allow-overlap": true,
-      "icon-ignore-placement": true,
-      "icon-padding": 0,
-    },
-    paint: { "icon-opacity": 0.95 },
   };
 }
 
@@ -448,38 +362,13 @@ export default function ShadowsLayer({
       return groups;
     }
 
-    function writeDust(spots: Array<{ lon: number; lat: number }>, wind: WeatherValues | null) {
-      if (!map.getSource(DUST_SOURCE_ID)) {
-        map.addSource(DUST_SOURCE_ID, {
-          type: "geojson",
-          data: { type: "FeatureCollection", features: [] },
-        } as never);
-      }
-      const icon = ensureDustImage(map, themeRef.current);
-      if (!map.getLayer(DUST_LAYER_ID)) {
-        map.addLayer(dustLayerSpec(icon) as never, firstSymbolLayerId(map));
-      } else {
-        map.setLayoutProperty(DUST_LAYER_ID, "icon-image", icon);
-      }
-      const rotate = wind ? (wind.windDirectionDeg + 180) % 360 : 0;
-      const features: Array<Feature<Point, { rotate: number; speed: number }>> =
-        wind
-          ? spots.map((spot) => ({
-              type: "Feature" as const,
-              properties: { rotate, speed: wind.windSpeedMs },
-              geometry: {
-                type: "Point" as const,
-                coordinates: [spot.lon, spot.lat],
-              },
-            }))
-          : [];
-      const collection: FeatureCollection<Point, { rotate: number; speed: number }> = {
-        type: "FeatureCollection",
-        features,
-      };
-      (map.getSource(DUST_SOURCE_ID) as maplibregl.GeoJSONSource | undefined)?.setData(
-        collection as never,
-      );
+    /**
+     * Очаги пыли публикуем в общий store: рисует их canvas слоя «Поток ветра»
+     * (одно поле частиц на всё приложение), а здесь только данные redzones.
+     * Пустой список = пыли нет; при выключении слоя store тоже очищается.
+     */
+    function publishDust(spots: Array<{ lon: number; lat: number }>) {
+      dustStore.publish(spots.map((spot) => ({ lon: spot.lon, lat: spot.lat })));
     }
 
     /** Полигоны строек/пустырей в кадре (overlays.pmtiles, z13+). */
@@ -545,6 +434,8 @@ export default function ShadowsLayer({
           (map.getSource(SHADOW_SOURCE_ID) as maplibregl.GeoJSONSource | undefined)?.setData(
             { type: "FeatureCollection", features: [] } as never,
           );
+          // Пыли на обзорном зуме нет: очагов не видно, шлейфы были бы кашей.
+          dustStore.publish([]);
           lastMinute = minutes;
           lastSignature = signature;
           setStats({
@@ -637,11 +528,11 @@ export default function ShadowsLayer({
         const polygonSpots = dustSpots(collectConstruction(), center.lat);
         const cached = weatherRef.current;
         // Ветер — на выбранный час: иначе тени на 08:00 считались бы по ветру
-        // «сейчас», и стрелки пыли спорили бы с плашкой.
+        // «сейчас», и шлейфы пыли спорили бы с плашкой.
         const wind: WeatherValues | null = cached
           ? (weatherAt(cached, fixedMinutes) ?? cached)
           : null;
-        if (wind) writeDust(polygonSpots, wind);
+        if (wind) publishDust(polygonSpots);
         const lowSun =
           sun.altitudeDeg > 0 && sun.altitudeDeg <= MIN_SHADOW_ALTITUDE_DEG;
         runRef.current += 1;
@@ -670,7 +561,7 @@ export default function ShadowsLayer({
             if (disposed) return;
             weatherRef.current = snapshot;
             const hourWind = weatherAt(snapshot, fixedMinutes) ?? snapshot;
-            writeDust(polygonSpots, hourWind);
+            publishDust(polygonSpots);
             setStats((current) => ({
               ...current,
               dust: polygonSpots.length,
@@ -733,13 +624,13 @@ export default function ShadowsLayer({
       map.off("sourcedata", onSourceData);
       map.off("load", compute);
       try {
-        if (map.getLayer(DUST_LAYER_ID)) map.removeLayer(DUST_LAYER_ID);
-        if (map.getSource(DUST_SOURCE_ID)) map.removeSource(DUST_SOURCE_ID);
         if (map.getLayer(SHADOW_LAYER_ID)) map.removeLayer(SHADOW_LAYER_ID);
         if (map.getSource(SHADOW_SOURCE_ID)) map.removeSource(SHADOW_SOURCE_ID);
       } catch {
         // Карта уже удалена вместе со стилем.
       }
+      // Слой выключен — очагов пыли больше нет.
+      dustStore.clear();
     };
   }, [visible, mapReady, theme, minutes]);
 

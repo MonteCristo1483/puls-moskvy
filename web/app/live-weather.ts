@@ -21,6 +21,8 @@ export type WeatherValues = {
   /** Метеорологическое направление «откуда», градусы 0–360. */
   windDirectionDeg: number;
   precipitationMm: number;
+  /** Код погоды WMO (0–99): дождь/снег/туман. null — поля в ответе не было. */
+  weatherCode: number | null;
 };
 
 export type WeatherSnapshot = WeatherValues & {
@@ -64,8 +66,10 @@ export function weatherQueryUrl(lat: number, lon: number): string {
   const params = new URLSearchParams({
     latitude: lat.toFixed(4),
     longitude: lon.toFixed(4),
-    current: "temperature_2m,wind_speed_10m,wind_direction_10m,precipitation",
-    hourly: "temperature_2m,wind_speed_10m,wind_direction_10m,precipitation",
+    current:
+      "temperature_2m,wind_speed_10m,wind_direction_10m,precipitation,weather_code",
+    hourly:
+      "temperature_2m,wind_speed_10m,wind_direction_10m,precipitation,weather_code",
     past_days: "1",
     forecast_days: "1",
     wind_speed_unit: "ms",
@@ -80,6 +84,15 @@ function numberField(current: Record<string, unknown>, key: string): number {
     throw new WeatherError(`Open-Meteo: нет поля current.${key}`);
   }
   return value;
+}
+
+/** Необязательное числовое поле: старые ответы и моки могут его не отдавать. */
+function optionalNumber(
+  record: Record<string, unknown>,
+  key: string,
+): number | null {
+  const value = record[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function numberAt(values: unknown, index: number): number | null {
@@ -123,6 +136,9 @@ function parseHours(payload: unknown): WeatherHour[] {
       windSpeedMs,
       windDirectionDeg,
       precipitationMm: numberAt(record.precipitation, index) ?? 0,
+      // weather_code в часовом ряду нужен осадкам на выбранный час; если его
+      // нет — состояние неба считаем «ясно».
+      weatherCode: numberAt(record.weather_code, index),
     });
   }
   return hours;
@@ -142,6 +158,7 @@ export function parseWeather(payload: unknown): WeatherSnapshot {
     windSpeedMs: numberField(record, "wind_speed_10m"),
     windDirectionDeg: numberField(record, "wind_direction_10m"),
     precipitationMm: numberField(record, "precipitation"),
+    weatherCode: optionalNumber(record, "weather_code"),
     time,
     hours: parseHours(payload),
   };
