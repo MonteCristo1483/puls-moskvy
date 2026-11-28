@@ -43,7 +43,9 @@ function sourceData(data: WorksData | null): FeatureCollection<Geometry, WorkPro
 /**
  * S9: слой работ живёт только на живых фактах. Пока `meta.json` грузится,
  * считаем слой доступным (иначе чип и карточка мигали бы при каждой загрузке);
- * скрываем, только когда состояние известно и данные устарели/отсутствуют.
+ * скрываем, только когда состояние известно и данные устарели/отсутствуют
+ * (`stale` и `missing` — разные причины, но для человека обе значат «нет
+ * живых данных», поэтому обе скрывают слой).
  *
  * Причина пишется в консоль **один раз на переход** «доступен → скрыт», а не
  * на каждый рендер: `available` зовут и хост, и панель. Повторная запись
@@ -53,14 +55,14 @@ let warnedHidden = false;
 
 function worksAvailable(facts: FactsSnapshot): boolean {
   if (facts.status === "loading") return true;
-  if (!facts.stale) {
+  if (facts.status === "ok") {
     warnedHidden = false;
     return true;
   }
   if (!warnedHidden) {
     warnedHidden = true;
     const reason =
-      facts.meta === null
+      facts.status === "missing"
         ? "meta.json не найден"
         : `данные старше 24 ч (generated_at ${facts.generated ?? "неизвестно"})`;
     console.warn(`[S9] слой «${WORKS_LABEL}» скрыт: ${reason}`);

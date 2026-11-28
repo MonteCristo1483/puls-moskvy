@@ -86,8 +86,12 @@ const deepFeature = works.features.find(
   (feature) => String(feature.properties?.global_id) === DEEP_ID,
 );
 if (!deepFeature) throw new Error(`в works.geojson нет объекта ${DEEP_ID}`);
-const DEEP_CENTROID = centroidOf(deepFeature.geometry);
-if (!DEEP_CENTROID) throw new Error(`у объекта ${DEEP_ID} нет геометрии`);
+/** Центр объекта; функция сразу падает, если геометрии нет — без null дальше. */
+const DEEP_CENTROID: LonLat = (() => {
+  const point = centroidOf(deepFeature.geometry);
+  if (!point) throw new Error(`у объекта ${DEEP_ID} нет геометрии`);
+  return point;
+})();
 
 /** Жилой дом рядом с объектом: «Тверская улица, 12 с6» (~46 м). */
 const HOME = { id: 105773714, lng: 37.608509, lat: 55.763475 };
@@ -213,13 +217,47 @@ async function waitForMapIdle(page: Page) {
   );
 }
 
-/** Экранная точка отрисованной работы в заданной области (для клика). */
+/** Проверенная точка клика: под ней карта и отрисованная фича работ. */
+type WorksPoint = { x: number; y: number; id: string };
+
+type ScreenArea = { left: number; right: number; top: number; bottom: number };
+
+/** В точке (x, y) карта, а не панель, шторка или плашка поверх неё. */
+async function isMapUnderPoint(page: Page, x: number, y: number): Promise<boolean> {
+  return page.evaluate(
+    ({ px, py }) => {
+      const element = document.elementFromPoint(px, py);
+      if (!element) return false;
+      if (element.classList.contains("maplibregl-canvas")) return true;
+      return element.closest(".maplibregl-map") !== null;
+    },
+    { px: x, py: y },
+  );
+}
+
+/** Камера едет? Пока едет, проекция точки не совпадает с отрисовкой. */
+async function isMapMoving(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const map = (window as unknown as { __map?: { isMoving(): boolean } }).__map;
+    return map ? map.isMoving() : true;
+  });
+}
+
+/**
+ * Экранная точка отрисованной работы в заданной области (для клика).
+ *
+ * Кандидат проверяется трижды и только потом берётся: он в области, под ним
+ * карта (`elementFromPoint` не панель/шторка/плашка) и в нём действительно фича
+ * работ. Кандидатов перебираем, а не берём первого: проекция одной вершины
+ * может попасть под панель, мимо отрисовки или на границу фигуры.
+ */
 async function findWorksPoint(
   page: Page,
-  area: { left: number; right: number; top: number; bottom: number },
-): Promise<{ x: number; y: number; id: string } | null> {
+  area: ScreenArea,
+  skip: string[] = [],
+): Promise<WorksPoint | null> {
   return page.evaluate(
-    ({ left, right, top, bottom }) => {
+    ({ left, right, top, bottom, skip }) => {
       const map = (window as unknown as { __map?: BrowserMap }).__map;
       if (!map) return null;
       const layers = ["works-fill", "works-line", "works-point"].filter((id) =>
@@ -228,49 +266,156 @@ async function findWorksPoint(
       if (!layers.length) return null;
       const features = map.queryRenderedFeatures({ layers });
 
-      function position(value: unknown): [number, number] | null {
-        if (
-          Array.isArray(value) &&
-          value.length >= 2 &&
-          typeof value[0] === "number" &&
-          typeof value[1] === "number"
-        ) {
-          return [value[0], value[1]];
-        }
-        if (Array.isArray(value)) {
-          for (const item of value) {
-            const found = position(item);
-            if (found) return found;
+      function positions(value: unknown): [number, number][] {
+        const found: [number, number][] = [];
+        const walk = (item: unknown): void => {
+          if (!Array.isArray(item)) return;
+          if (
+            item.length >= 2 &&
+            typeof item[0] === "number" &&
+            typeof item[1] === "number"
+          ) {
+            found.push([item[0], item[1]]);
+            return;
           }
-        }
-        return null;
+          for (const child of item) walk(child);
+        };
+        walk(value);
+        return found;
       }
 
-      // Полигон/точку берём раньше линии: по тонкой линии клик менее надёжен.
-      const rank = (feature: RenderedFeature) =>
+      const lineish = (feature: RenderedFeature) =>
         feature.geometry?.type === "LineString" ||
-        feature.geometry?.type === "MultiLineString"
-          ? 1
-          : 0;
-      const ordered = [...features].sort((a, b) => rank(a) - rank(b));
+        feature.geometry?.type === "MultiLineString";
+      // Полигон/точку берём раньше линии: по тонкой линии клик менее надёжен.
+      const ordered = [...features].sort(
+        (a, b) => Number(lineish(a)) - Number(lineish(b)),
+      );
+      const skipped = new Set(skip);
 
       for (const feature of ordered) {
-        const coordinate = position(feature.geometry?.coordinates);
-        if (!coordinate) continue;
-        const point = map.project(coordinate);
-        const x = Math.round(point.x);
-        const y = Math.round(point.y);
-        if (x < left || x > right || y < top || y > bottom) continue;
-        const check = map.queryRenderedFeatures([x, y], { layers });
-        const raw = check[0]?.properties?.global_id;
-        if (check.length && raw !== null && raw !== undefined) {
-          return { x, y, id: String(raw) };
+        const coordinates = positions(feature.geometry?.coordinates);
+        if (!coordinates.length) continue;
+        // Внутренняя точка надёжнее границы: у полигона — среднее координат
+        // (та же формула, что в карточке), у линии — середина; первая вершина
+        // только запасной вариант — на границе попадание шаткое.
+        const probes: [number, number][] = [];
+        if (!lineish(feature)) {
+          let lng = 0;
+          let lat = 0;
+          for (const [x, y] of coordinates) {
+            lng += x;
+            lat += y;
+          }
+          probes.push([lng / coordinates.length, lat / coordinates.length]);
+        }
+        probes.push(coordinates[Math.floor(coordinates.length / 2)]);
+        probes.push(coordinates[0]);
+
+        for (const coordinate of probes) {
+          const point = map.project(coordinate);
+          const x = Math.round(point.x);
+          const y = Math.round(point.y);
+          if (x < left || x > right || y < top || y > bottom) continue;
+          if (skipped.has(`${x},${y}`)) continue;
+          // Панель, шторка или плашка поверх карты перехватят клик — не берём.
+          const element = document.elementFromPoint(x, y);
+          if (!element) continue;
+          if (
+            !element.classList.contains("maplibregl-canvas") &&
+            element.closest(".maplibregl-map") === null
+          ) {
+            continue;
+          }
+          const check = map.queryRenderedFeatures([x, y], { layers });
+          const raw = check[0]?.properties?.global_id;
+          if (check.length && raw !== null && raw !== undefined) {
+            return { x, y, id: String(raw) };
+          }
         }
       }
       return null;
     },
-    area,
+    { ...area, skip },
   );
+}
+
+/**
+ * Та же точка, но подтверждённая дважды с паузой, на стоящей камере и на карте
+ * под ней. После выбора дома камера ещё доезжает: точка, найденная в этот
+ * момент, через кадр уже мимо — линия работ 1.8 px, промах в пиксель = клик
+ * по пустому месту.
+ */
+async function waitStableWorksPoint(
+  page: Page,
+  area: ScreenArea,
+  skip: string[] = [],
+  timeout = 20_000,
+): Promise<WorksPoint | null> {
+  const deadline = Date.now() + timeout;
+  let previous: string | null = null;
+  while (Date.now() < deadline) {
+    const hit = await findWorksPoint(page, area, skip);
+    const key = hit ? `${hit.x},${hit.y},${hit.id}` : null;
+    if (
+      hit &&
+      key === previous &&
+      !(await isMapMoving(page)) &&
+      (await isMapUnderPoint(page, hit.x, hit.y))
+    ) {
+      return hit;
+    }
+    previous = key;
+    await page.waitForTimeout(120);
+  }
+  return null;
+}
+
+/**
+ * Открыть карточку работ кликом по проверенной точке. Камера после выбора дома
+ * доезжает, поэтому точка пересчитывается перед каждой попыткой. Клик не открыл
+ * карточку за 2 с — берём следующего кандидата, не больше `attempts` попыток.
+ */
+async function openWorkCardByClick(
+  page: Page,
+  area: ScreenArea,
+  attempts = 4,
+): Promise<WorksPoint | null> {
+  const card = page.locator("[data-work-card]");
+  const tried: string[] = [];
+  let recentered = false;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    await waitForMapIdle(page);
+    let hit = await waitStableWorksPoint(page, area, tried);
+    if (!hit && !recentered) {
+      // Полёт к дому мог увести камеру — возвращаемся к объекту, выбор не трогаем.
+      recentered = true;
+      await page.evaluate(
+        ({ center }) => {
+          const map = (window as unknown as { __map?: BrowserMap }).__map;
+          map?.jumpTo({ center, zoom: 15.5 });
+        },
+        { center: DEEP_CENTROID },
+      );
+      await waitForMapIdle(page);
+      await waitForRenderedWorks(page);
+      hit = await waitStableWorksPoint(page, area, tried);
+    }
+    if (!hit) continue;
+    tried.push(`${hit.x},${hit.y}`);
+    console.log(
+      `S7: клик по работе ${hit.id} в (${hit.x},${hit.y}), попытка ${attempt}/${attempts}`,
+    );
+    await page.mouse.click(hit.x, hit.y);
+    try {
+      await expect(card).toBeVisible({ timeout: 2_000 });
+      return hit;
+    } catch {
+      // Точка устарела (камера доехала) — пробуем следующего кандидата.
+      console.log(`S7: карточка не открылась в (${hit.x},${hit.y}) — следующая точка`);
+    }
+  }
+  return null;
 }
 
 /** Центр камеры, [lng, lat]; null — карты ещё нет. */
@@ -463,23 +608,11 @@ test("S7: одновременно открыта одна карточка — 
   const viewport = page.viewportSize();
   if (!viewport) throw new Error("нет viewport");
   const area = { left: 320, right: 820, top: 140, bottom: viewport.height - 170 };
-  let workHit = await findWorksPoint(page, area);
-  if (!workHit) {
-    // Полёт к дому мог увести камеру — возвращаемся к объекту, выбор не трогаем.
-    await page.evaluate(
-      ({ center }) => {
-        const map = (window as unknown as { __map?: BrowserMap }).__map;
-        map?.jumpTo({ center, zoom: 15.5 });
-      },
-      { center: DEEP_CENTROID },
-    );
-    await waitForMapIdle(page);
-    await waitForRenderedWorks(page);
-    workHit = await findWorksPoint(page, area);
-  }
-  expect(workHit, "не нашли работу рядом с домом").not.toBeNull();
-  if (!workHit) return;
-  await page.mouse.click(workHit.x, workHit.y);
-  await expect(card).toBeVisible();
-  await expect(sheet).toHaveAttribute("data-sheet", "closed");
+  const workHit = await openWorkCardByClick(page, area, 4);
+  expect(
+    workHit,
+    "не открыли карточку работ кликом по проверенной точке",
+  ).not.toBeNull();
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await expect(sheet).toHaveAttribute("data-sheet", "closed", { timeout: 20_000 });
 });

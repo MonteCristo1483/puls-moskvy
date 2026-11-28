@@ -16,7 +16,7 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { Badge, Panel } from "./design";
 import { ABOUT_DISCLAIMER, DATA_SOURCES } from "./data-sources";
-import { factsStore, initialFacts } from "./layers/facts-store";
+import { factsStore, initialFacts, type FactsStatus } from "./layers/facts-store";
 
 /** «openstreetmap.org/copyright» — ссылка без протокола, читается глазом. */
 function linkLabel(url: string): string {
@@ -26,12 +26,10 @@ function linkLabel(url: string): string {
 /**
  * Снимок фактов → строка про дату выгрузки. Устаревшие данные не выдаём за
  * свежие: дату оставляем, но помечаем словом «устарели». Файла нет — «нет
- * данных» (S9: обещать нечего, если источника нет).
+ * данных» (S9: обещать нечего, если источника нет). `stale` и `missing` —
+ * разные машинные состояния, но для человека это по-прежнему две строки.
  */
-function exportDateText(
-  status: "loading" | "ok" | "missing",
-  clock: string | null,
-): string {
+function exportDateText(status: FactsStatus, clock: string | null): string {
   if (status === "loading") return "Выгрузка городских данных: загрузка…";
   if (clock === null) return "Выгрузка городских данных: нет данных";
   return status === "ok"
