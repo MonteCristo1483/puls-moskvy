@@ -50,37 +50,47 @@ test("Погода: плашка показывает данные Open-Meteo, �
   // Атрибуция CC BY 4.0 видна на карте (title плашки), а не только в футере.
   await expect(pill).toHaveAttribute("title", /CC BY 4\.0/);
 
-  // Стрелки ветра — отдельный symbol-слой MapLibre. На живой карте он
-  // появляется только после того, как стиль и тайлы готовы (isStyleLoaded),
-  // поэтому ждём опросом — это и есть регрессия на «слой не создался».
-  // Без WebGL/данных карты нет; тогда проверяем только плашку.
+  // Ветер на карте — поток частиц на canvas, а не symbol-слой стрелок.
+  // Проверяем, что канвас появился и в нём есть живые точки, а слоя
+  // `weather-wind-arrows` больше нет в стиле карты.
+  const atmosphere = page.locator('[data-atmosphere="1"]');
+  await expect(atmosphere).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const canvas = document.querySelector('[data-atmosphere="1"]');
+          return Number(
+            canvas?.getAttribute("data-atmosphere-particles") ?? 0,
+          );
+        }),
+      { timeout: 20_000, message: "частицы ветра появились в кадре" },
+    )
+    .toBeGreaterThan(0);
+
+  // Без WebGL/данных карты нет стиля; тогда проверяем только канвас.
   const hasMap = await page.evaluate(() =>
     Boolean((window as unknown as { __map?: unknown }).__map),
   );
   if (hasMap) {
+    type StyleMap = {
+      getStyle?: () => { layers?: { id: string }[] } | undefined;
+    };
     await expect
       .poll(
         () =>
           page.evaluate(() => {
-            const map = (
-              window as unknown as {
-                __map?: {
-                  getLayer: (id: string) => unknown;
-                  queryRenderedFeatures: (options: {
-                    layers: string[];
-                  }) => unknown[];
-                };
-              }
-            ).__map;
-            if (!map || typeof map.getLayer !== "function") return -1;
-            if (!map.getLayer("weather-wind-arrows")) return 0;
-            return map.queryRenderedFeatures({
-              layers: ["weather-wind-arrows"],
-            }).length;
+            const map = (window as unknown as { __map?: StyleMap }).__map;
+            return (map?.getStyle?.()?.layers ?? []).length;
           }),
-        { timeout: 20_000, message: "стрелки ветра отрисованы на карте" },
+        { timeout: 20_000, message: "стиль карты загружен" },
       )
       .toBeGreaterThan(0);
+    const layerIds = await page.evaluate(() => {
+      const map = (window as unknown as { __map?: StyleMap }).__map;
+      return (map?.getStyle?.()?.layers ?? []).map((layer) => layer.id);
+    });
+    expect(layerIds).not.toContain("weather-wind-arrows");
   }
 
   expect(pageErrors).toEqual([]);
