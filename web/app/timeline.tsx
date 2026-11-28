@@ -14,6 +14,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 import { Panel } from "./design";
+import {
+  overrideSkyPhase,
+  readThemeOverride,
+  skyPhase,
+  sunAltitude,
+} from "./daylight";
 import { formatClock, moscowClockMinutes, parseClockParam } from "./solar";
 
 const MINUTES_PER_HOUR = 60;
@@ -61,6 +67,18 @@ function percent(minutes: number): number {
   return (Math.min(MINUTES_PER_DAY, Math.max(0, minutes)) / MINUTES_PER_DAY) * 100;
 }
 
+/**
+ * «−2,1°» для подписи: запятая как десятичный разделитель, один знак после
+ * запятой, минус — типографский. Положительные значения печатаем без «+»:
+ * знак нужен только чтобы отличить подземное Солнце от надземного.
+ */
+function formatSunAltitude(altitudeDeg: number): string {
+  const rounded = Math.round(altitudeDeg * 10) / 10;
+  const sign = rounded < 0 ? "−" : "";
+  const value = Math.abs(rounded).toFixed(1).replace(".", ",");
+  return `${sign}${value}°`;
+}
+
 export function Timeline({
   minutes,
   onChange,
@@ -99,6 +117,21 @@ export function Timeline({
       : minutes < nowMinutes
         ? `Было · ${formatClock(minutes)}`
         : `Будет · ${formatClock(minutes)}`;
+
+  // D4: в сумерках подпись говорит, какая это фаза и где Солнце, — приёмка
+  // ROADMAP требует высоту именно здесь. `?theme=` сумерки выключает, поэтому
+  // и подпись не обещает света, которого на карте нет (data-sky = day/night).
+  const themeOverride = readThemeOverride(window.location.search);
+  const phase =
+    themeOverride === null
+      ? skyPhase(currentMinutes)
+      : overrideSkyPhase(themeOverride);
+  const twilightLabel =
+    phase === "dawn" || phase === "dusk"
+      ? ` · ${phase === "dawn" ? "рассвет" : "закат"}, солнце ${formatSunAltitude(
+          sunAltitude(currentMinutes),
+        )}`
+      : "";
 
   const applyClientX = (clientX: number) => {
     const rect = trackRef.current?.getBoundingClientRect();
@@ -196,6 +229,7 @@ export function Timeline({
           }`}
         >
           {modeLabel}
+          {twilightLabel}
         </span>
         <button
           type="button"

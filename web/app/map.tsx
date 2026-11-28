@@ -12,7 +12,8 @@ import LayersPanel, { DEFAULT_VISIBILITY } from "./layers-panel";
 import type { Visibility } from "./layers-panel";
 import SearchBox from "./search-box";
 import type { SearchItem } from "./search-box";
-import { readThemeOverride, themeForTime } from "./daylight";
+import { overrideSkyPhase, readThemeOverride, skyState, themeForTime } from "./daylight";
+import type { SkyPhase } from "./daylight";
 import { initialTheme } from "./theme";
 import type { Theme } from "./theme";
 import { moscowClockMinutes } from "./solar";
@@ -35,6 +36,13 @@ if (typeof window !== "undefined") {
     window.innerWidth < 768 ||
     window.devicePixelRatio >= 2;
   maplibregl.setWorkerCount(mobile ? 2 : Math.min(4, navigator.hardwareConcurrency || 1));
+}
+
+// D4: `data-sun-altitude` — одна цифра после точки, минус обычный ASCII.
+// −0 после округления печатаем как «0.0», иначе в разметке появилось бы «-0.0».
+function formatSunAltitudeAttr(altitudeDeg: number): string {
+  const rounded = Math.round(altitudeDeg * 10) / 10;
+  return (Object.is(rounded, -0) ? 0 : rounded).toFixed(1);
 }
 
 export default function Map() {
@@ -208,16 +216,44 @@ export default function Map() {
   // Тема — следствие времени: выбранный час таймлайна, в живом режиме —
   // текущее московское время. `?theme=` — детерминированный оверрайд для
   // тестов и скриншотов, он сильнее расчёта по Солнцу.
+  // D4: рядом с темой ставим фазу неба (`data-sky`), высоту Солнца
+  // (`data-sun-altitude`) и силу сумерек (`--sky-tint`) — тот же расчёт,
+  // тот же тик, поэтому состояния не могут разойтись.
   // applyThemeRef перекрашивает слои и 3D, поэтому зовём только при смене.
   useEffect(() => {
     const override = readThemeOverride(window.location.search);
     const minutes = clockMinutes ?? nowMinutes;
     let next: Theme;
-    if (override !== null) next = override;
-    else if (minutes === null) return;
-    else next = themeForTime(minutes);
+    let phase: SkyPhase;
+    let altitude: number | null = null;
+    let strength = 0;
 
-    document.documentElement.dataset.theme = next;
+    if (override !== null) {
+      // Детерминированный оверрайд: сумерки выключены, тема и фаза — из него.
+      next = override;
+      phase = overrideSkyPhase(override);
+      if (minutes !== null) altitude = skyState(minutes).altitudeDeg;
+    } else if (minutes === null) {
+      return;
+    } else {
+      const sky = skyState(minutes);
+      next = themeForTime(minutes);
+      phase = sky.phase;
+      altitude = sky.altitudeDeg;
+      strength = sky.strength;
+    }
+
+    const root = document.documentElement;
+    root.dataset.theme = next;
+    root.dataset.sky = phase;
+    if (altitude === null) delete root.dataset.sunAltitude;
+    else root.dataset.sunAltitude = formatSunAltitudeAttr(altitude);
+    // 0…1 для CSS: opacity слоя сумерек. Без сумерек — честный нуль.
+    root.style.setProperty(
+      "--sky-tint",
+      String(Math.round(strength * 1000) / 1000),
+    );
+
     if (themeRef.current !== next) {
       themeRef.current = next;
       applyThemeRef.current?.(next);
@@ -352,6 +388,11 @@ export default function Map() {
       <div ref={containerRef} className="map-gradient map-grade h-full w-full" />
       <div className="map-haze pointer-events-none absolute inset-x-0 top-0" aria-hidden />
       <div className="map-vignette pointer-events-none absolute inset-0" aria-hidden />
+      {/* D4: сумеречный свет — поверх канваса и дымки, но под интерфейсом.
+          position/pointer-events/z-index заданы в globals.css: слой не ловит
+          клики (чипы, таймлайн, карточка остаются нажимаемыми) и не перекрывает
+          панели (z-9/z-10 против z-2). */}
+      <div className="sky-twilight" data-sky-layer="1" aria-hidden />
       {perfEnabled && (
         <div
           ref={perfRef}

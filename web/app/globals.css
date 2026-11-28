@@ -89,6 +89,55 @@ body {
   );
 }
 
+/* D4: сумеречный свет поверх карты. Фаза приходит на <html data-sky>, сила —
+   в `--sky-tint` (0…1, её ставит map.tsx из daylight.ts). Слой лежит выше
+   канваса и дымки (z-2), но ниже интерфейса (панели — z-9/z-10) и клики не
+   ловит вообще: чипы, таймлайн, плашки и карточка остаются нажимаемыми.
+   Никаких filter/backdrop-filter — только цветная вуаль, чтобы контраст
+   подписей карты не проваливался ниже AA (см. tokens.css: альфы подобраны
+   по худшей паре «текст подписи / её ореол»). */
+.sky-twilight {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: var(--sky-tint, 0);
+  background: linear-gradient(
+    180deg,
+    var(--c-twi-top) 0%,
+    var(--c-twi-mid) 52%,
+    var(--c-twi-low) 100%
+  );
+  transition: opacity 480ms ease;
+}
+
+/* Рассвет — прохладный розово-сиреневый, закат — тёплый оранжево-янтарный.
+   День и ночь показывают рассветные значения, но --sky-tint = 0, поэтому
+   смена фазы не даёт вспышки: слой просто остаётся прозрачным. */
+html[data-sky="dawn"] .sky-twilight,
+html[data-sky="day"] .sky-twilight,
+html[data-sky="night"] .sky-twilight {
+  --c-twi-top: var(--c-twi-dawn-top);
+  --c-twi-mid: var(--c-twi-dawn-mid);
+  --c-twi-low: var(--c-twi-dawn-low);
+}
+
+html[data-sky="dusk"] .sky-twilight {
+  --c-twi-top: var(--c-twi-dusk-top);
+  --c-twi-mid: var(--c-twi-dusk-mid);
+  --c-twi-low: var(--c-twi-dusk-low);
+}
+
+/* Контролы карты — интерфейс, а не «свет»: держим их выше слоя сумерек,
+   иначе кнопки зума и компас тонируются закатом (у maplibre у них z-index 2,
+   как и у слоя, а он в DOM позже). */
+.maplibregl-ctrl-top-left,
+.maplibregl-ctrl-top-right,
+.maplibregl-ctrl-bottom-left,
+.maplibregl-ctrl-bottom-right {
+  z-index: 3;
+}
+
 /* D3: тема переключается по часам, поэтому цвета интерфейса должны
    перетекать, а не щёлкать. Анимируем только цветовые свойства — никаких
    transform/filter, иначе дёргается карта. `:where()` держит специфичность
@@ -113,11 +162,12 @@ body {
   }
 }
 
-/* Для тех, кому движение мешает, смена темы происходит мгновенно. */
+/* Для тех, кому движение мешает, смена темы и сумерек происходит мгновенно. */
 @media (prefers-reduced-motion: reduce) {
   html,
   body,
   html[data-theme] .transition-colors,
+  .sky-twilight,
   :where(html[data-theme], html[data-theme] *) {
     transition: none;
   }
