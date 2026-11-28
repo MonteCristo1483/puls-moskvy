@@ -1,4 +1,4 @@
-:HL["/puls-moskvy/_next/static/chunks/0c7fcqx4a_no3.css","style"]
+:HL["/puls-moskvy/_next/static/chunks/0uo21kk2fy182.css","style"]
 2:[["children",{"s":"__PAGE__","h":160}]]
 1:[["children",{"s":"r","h":96,"c":"$Q2"}]]
-0:{"b":"kEG_pcfk3R3OPnCIDXuN8","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
+0:{"b":"hZmZ2srZfsF777EiY5zDZ","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
