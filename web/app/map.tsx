@@ -5,8 +5,10 @@ import type { MouseEvent } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import AboutData from "./about-data";
-import BuildingSheet from "./building-sheet";
+import BuildingSheet, { BONUS_LABELS } from "./building-sheet";
 import type { BuildingBreakdown, SelectedBuilding } from "./building-sheet";
+import { nearbyFromPois } from "./nearby";
+import type { LonLat, NearbyPoiFeature, NearbyRow } from "./nearby";
 import LayerHost from "./layers/host";
 import LayersPanel, { DEFAULT_VISIBILITY } from "./layers-panel";
 import type { Visibility } from "./layers-panel";
@@ -20,7 +22,7 @@ import { moscowClockMinutes } from "./solar";
 import Timeline, { readTimelineParam, writeTimelineParam } from "./timeline";
 import { readWorkParam } from "./layers/works-store";
 import { mountMap } from "./map/engine";
-import { ISOCHRONE_URL, fetchGzipJson } from "./map/tiles";
+import { ISOCHRONE_URL, MANIFEST_URL, fetchGzipJson } from "./map/tiles";
 import type { BuildingRoutes, FlatRoutes, IsoGeometry, IsochroneData } from "./map/tiles";
 
 // Воркер maplibre отдаём статикой из public/ — bundlers не резолвят
@@ -44,6 +46,40 @@ function formatSunAltitudeAttr(altitudeDeg: number): string {
   const rounded = Math.round(altitudeDeg * 10) / 10;
   return (Object.is(rounded, -0) ? 0 : rounded).toFixed(1);
 }
+
+// S8: строка `buildings-index.json` района — [id, lon, lat, address, …].
+type BuildingIndexRow = (number | string | null)[];
+
+type DistrictEntry = { id: number; bbox: [number, number, number, number] };
+
+// S8: дом у границы района не должен «терять» ближайший POI за границей.
+// Поэтому смотрим столько же районов, сколько движок держит в кэше POI
+// (`POI_NEAR_DISTRICTS` в map/poi.ts), и берём ближайшие по bbox.
+const NEARBY_POI_DISTRICTS = 4;
+
+/** Грубое расстояние от точки до bbox района, метры (0 внутри). */
+function distanceToBboxMeters(point: LonLat, bbox: DistrictEntry["bbox"]): number {
+  const [west, south, east, north] = bbox;
+  const dx = point[0] < west ? west - point[0] : point[0] > east ? point[0] - east : 0;
+  const dy = point[1] < south ? south - point[1] : point[1] > north ? point[1] - north : 0;
+  return Math.hypot(dx * 62_500, dy * 111_320);
+}
+
+/** JSON по относительному пути; null вместо исключения — блок просто не покажем. */
+async function fetchJsonOrNull<T>(url: string): Promise<T | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+const wait = (ms: number) =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 
 export default function Map() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -95,6 +131,16 @@ export default function Map() {
   const breakdownCacheRef = useRef<Record<number, BuildingBreakdown | null>>({});
   // Изохрона: минуты выбраны в карточке, геометрия — по файлу дома.
   const [contour, setContour] = useState<number | null>(null);
+  // S8: строки «Рядом» выбранного дома (null — ещё не посчитаны).
+  const [nearby, setNearby] = useState<NearbyRow[] | null>(null);
+  const nearbyCacheRef = useRef<Record<string, NearbyRow[] | null>>({});
+  const buildingIndexCacheRef = useRef<
+    Record<number, Promise<BuildingIndexRow[] | null>>
+  >({});
+  const districtPoiCacheRef = useRef<
+    Record<number, Promise<NearbyPoiFeature[] | null>>
+  >({});
+  const manifestCacheRef = useRef<Promise<DistrictEntry[] | null> | null>(null);
   const isoShardCacheRef = useRef<
     Record<string, Promise<Record<string, IsochroneData> | null>>
   >({});
@@ -201,6 +247,120 @@ export default function Map() {
       cancelled = true;
     };
   }, [selected?.id, contour]);
+
+  // S8: «Рядом» — расстояния до пяти категорий POI.
+  //
+  // Почему считаем здесь, а не берём из разбивки: в тайлы домов попадает
+  // только компактная v2-форма (`{v,i,f,fl}`) без `bonuses` — расстояний
+  // в ней нет. Поэтому источник — `poi.geojson` района дома и соседей,
+  // а расстояние считаем по прямой своей haversine (то же правило, что в
+  // приёмке S8: ручной замер в QGIS — тоже прямая). Район дома движок пишет
+  // в `districtByBuildingRef` при выборе (его же использует изохрона),
+  // координаты дома — из `buildings-index.json` того же района.
+  useEffect(() => {
+    let cancelled = false;
+    const id = selected?.id ?? null;
+    if (id === null) {
+      setNearby(null);
+      return;
+    }
+    // Пока считаются новые расстояния, старые строки не показываем: цифры
+    // одного дома под адресом другого — хуже, чем пустой блок.
+    setNearby(null);
+
+    const loadBuildingPoint = async (
+      districtId: number,
+      buildingId: number,
+    ): Promise<[number, number] | null> => {
+      const request =
+        buildingIndexCacheRef.current[districtId] ??
+        (buildingIndexCacheRef.current[districtId] = fetchJsonOrNull<
+          BuildingIndexRow[]
+        >(`data/districts/${districtId}/buildings-index.json`));
+      const rows = await request;
+      const row = rows?.find((entry) => Number(entry[0]) === buildingId);
+      if (!row) return null;
+      const lon = Number(row[1]);
+      const lat = Number(row[2]);
+      return Number.isFinite(lon) && Number.isFinite(lat) ? [lon, lat] : null;
+    };
+    const loadDistrictPois = async (
+      districtId: number,
+    ): Promise<NearbyPoiFeature[] | null> => {
+      const request =
+        districtPoiCacheRef.current[districtId] ??
+        (districtPoiCacheRef.current[districtId] = fetchJsonOrNull<{
+          features?: NearbyPoiFeature[];
+        }>(`data/districts/${districtId}/poi.geojson`).then(
+          (data) => data?.features ?? null,
+        ));
+      return request;
+    };
+    // POI района дома + ближайших районов: у границы ближайшая школа или
+    // метро часто «за углом», но уже в соседнем районе — без этого карточка
+    // завышала бы расстояние на сотни метров.
+    const loadNearbyPois = async (
+      districtId: number,
+      point: LonLat,
+    ): Promise<NearbyPoiFeature[] | null> => {
+      const manifest =
+        manifestCacheRef.current ??
+        (manifestCacheRef.current = fetchJsonOrNull<{
+          districts?: DistrictEntry[];
+        }>(MANIFEST_URL).then((data) => data?.districts ?? null));
+      const districts = await manifest;
+      const districtIds = districts
+        ? [...districts]
+            .sort(
+              (a, b) =>
+                distanceToBboxMeters(point, a.bbox) -
+                distanceToBboxMeters(point, b.bbox),
+            )
+            .slice(0, NEARBY_POI_DISTRICTS)
+            .map((district) => district.id)
+        : [];
+      if (!districtIds.includes(districtId)) districtIds.unshift(districtId);
+      const lists = await Promise.all(
+        districtIds.map((id) => loadDistrictPois(id)),
+      );
+      const merged = lists.flatMap((list) => list ?? []);
+      return merged.length ? merged : loadDistrictPois(districtId);
+    };
+
+    const load = async () => {
+      // Район пишет движок в том же тике, что и выбор, но перестрахуемся
+      // короткими попытками: без района файлы не найти.
+      let districtId = districtByBuildingRef.current[id];
+      for (let attempt = 0; attempt < 20 && districtId === undefined; attempt += 1) {
+        await wait(50);
+        districtId = districtByBuildingRef.current[id];
+      }
+      if (districtId === undefined) return;
+
+      const cacheKey = `${districtId}:${id}`;
+      const cached = nearbyCacheRef.current[cacheKey];
+      if (cached) {
+        if (!cancelled) setNearby(cached);
+        return;
+      }
+
+      const point = await loadBuildingPoint(districtId, id);
+      const pois = point ? await loadNearbyPois(districtId, point) : null;
+      if (cancelled) return;
+      if (!point || !pois) {
+        setNearby(null);
+        return;
+      }
+      const rows = nearbyFromPois(point, pois, BONUS_LABELS);
+      nearbyCacheRef.current[cacheKey] = rows;
+      setNearby(rows);
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.id]);
 
   // D3: в живом режиме («Сейчас») тикаем раз в минуту, чтобы на рассвете
   // тема сменилась сама, без перезагрузки. При выбранном часе таймлайна
@@ -417,6 +577,7 @@ export default function Map() {
       />
       <BuildingSheet
         building={selected}
+        nearby={nearby}
         onClose={() => deselectRef.current?.()}
         contour={contour}
         onContourChange={setContour}

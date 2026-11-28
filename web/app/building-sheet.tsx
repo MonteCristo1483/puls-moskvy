@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ChipButton } from "./design";
 import { SCORE_COLORS } from "./map/palette";
+import { NEARBY_RADIUS_M, filterWithinRadius } from "./nearby";
+import type { NearbyRow } from "./nearby";
 
 export type BonusEntry = {
   distance_m: number;
@@ -47,7 +50,8 @@ export type SelectedBuilding = {
   percentiles?: Percentiles;
 };
 
-const BONUS_LABELS: Record<string, string> = {
+// Подписи категорий; строки «Рядом» строятся этими же подписями.
+export const BONUS_LABELS: Record<string, string> = {
   transport: "Транспорт",
   schools: "Школы",
   parks: "Парки",
@@ -271,21 +275,33 @@ export default function BuildingSheet({
   onClose,
   contour,
   onContourChange,
+  nearby,
 }: {
   building: SelectedBuilding | null;
   onClose: () => void;
   contour: number | null;
   onContourChange: (minutes: number | null) => void;
+  /** S8: пять категорий POI с расстояниями (null — ещё не посчитаны). */
+  nearby: NearbyRow[] | null;
 }) {
   const touchStartY = useRef<number | null>(null);
   const [snap, setSnap] = useState<Snap>("mid");
   const [notice, setNotice] = useState<"idle" | "copied" | "manual">("idle");
   const [shareUrl, setShareUrl] = useState("");
+  // S8: фильтр «до 500 м» по умолчанию выключен — дальняя школа это факт,
+  // а не мусор; человек сам решает сузить список.
+  const [withinOnly, setWithinOnly] = useState(false);
   const noticeTimer = useRef<number | null>(null);
 
   // Новый выбор — шторка в среднее положение.
   useEffect(() => {
     setSnap("mid");
+  }, [building?.id]);
+
+  // Новый дом — фильтр снова выключен: состояние одного дома не переносится
+  // на другой.
+  useEffect(() => {
+    setWithinOnly(false);
   }, [building?.id]);
 
   const breakdown = building?.breakdown ?? null;
@@ -421,6 +437,13 @@ export default function BuildingSheet({
     building?.index !== null &&
     building?.index !== undefined &&
     Math.abs(rawTotal - building.index) > 0.05;
+
+  // S8: строки «Рядом» и фильтр. Пока расстояния не посчитаны (nearby === null),
+  // блок не рисуем: пять строк «нет данных» выглядели бы как «объектов нет».
+  const nearbyFiltered =
+    withinOnly && nearby ? filterWithinRadius(nearby, NEARBY_RADIUS_M) : null;
+  const nearbyVisible = nearbyFiltered ? nearbyFiltered.visible : nearby ?? [];
+  const nearbyHidden = nearbyFiltered ? nearbyFiltered.hidden : 0;
 
   const share = async () => {
     if (!building) return;
@@ -586,6 +609,73 @@ export default function BuildingSheet({
               {!compact && hiddenCount > 0 && (
                 <div className="mt-1 text-10 text-slate-400 dark:text-slate-500">
                   Ещё {hiddenCount} — в «Почему такой балл»
+                </div>
+              )}
+
+              {/* S8: «Рядом» — пять категорий с расстоянием в метрах. Дальние
+                  категории не прячем по умолчанию: «школа в 800 м» — факт,
+                  а фильтр «до 500 м» человек включает сам. */}
+              {nearby && nearby.length > 0 && (
+                <div data-nearby="1" className="mt-3">
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <span className="text-xs text-slate-400 dark:text-slate-500">
+                      Рядом
+                    </span>
+                    <span className="flex items-center gap-2">
+                      {withinOnly && nearbyHidden > 0 && (
+                        <span className="text-11 text-slate-400 dark:text-slate-500">
+                          скрыто {nearbyHidden}
+                        </span>
+                      )}
+                      <ChipButton
+                        checked={withinOnly}
+                        onToggle={() => setWithinOnly((current) => !current)}
+                        data-nearby-filter={withinOnly ? "on" : "off"}
+                        aria-label={`Только до ${NEARBY_RADIUS_M} м`}
+                        title={`Показать только категории ближе ${NEARBY_RADIUS_M} м`}
+                        className="shrink-0"
+                      >
+                        до {NEARBY_RADIUS_M} м
+                      </ChipButton>
+                    </span>
+                  </div>
+                  <ul className="space-y-1">
+                    {nearbyVisible.map((row) => (
+                      <li
+                        key={row.key}
+                        data-nearby-key={row.key}
+                        data-nearby-distance={
+                          row.distanceM === null ? "" : String(row.distanceM)
+                        }
+                        className="flex items-baseline justify-between gap-3 text-sm text-slate-700 dark:text-slate-200"
+                      >
+                        <span className="truncate">{row.label}</span>
+                        <span className="shrink-0 text-right">
+                          {row.distanceM === null ? (
+                            <span className="text-slate-400 dark:text-slate-500">
+                              нет данных
+                            </span>
+                          ) : (
+                            <>
+                              <span className="font-semibold">
+                                {row.distanceM} м
+                              </span>
+                              {row.minutes !== null && (
+                                <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">
+                                  · {row.minutes} мин
+                                </span>
+                              )}
+                              {!row.withinRadius && (
+                                <span className="ml-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                                  · дальше {NEARBY_RADIUS_M} м
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 
