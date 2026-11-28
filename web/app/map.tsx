@@ -19,6 +19,7 @@ import { initialTheme } from "./theme";
 import type { Theme } from "./theme";
 import { moscowClockMinutes } from "./solar";
 import Timeline, { readTimelineParam, writeTimelineParam } from "./timeline";
+import PerfProbe from "./perf-probe";
 import { readWorkParam } from "./layers/works-store";
 import { mountMap } from "./map/engine";
 import { ISOCHRONE_URL, fetchGzipJson } from "./map/tiles";
@@ -74,8 +75,6 @@ export default function Map() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const aboutOpenerRef = useRef<HTMLElement | null>(null);
   // Perf-1: оверлей диагностики включается только `?perf=1` (см. эффект ниже).
-  const [perfEnabled, setPerfEnabled] = useState(false);
-  const perfRef = useRef<HTMLDivElement | null>(null);
   const deselectRef = useRef<(() => void) | null>(null);
   const selectRef = useRef<((id: number) => void) | null>(null);
   const loadSearchIndexRef = useRef<(() => Promise<void>) | null>(null);
@@ -265,90 +264,6 @@ export default function Map() {
     setTheme(next);
   }, [clockMinutes, nowMinutes]);
 
-  // ── Перф-оверлей (?perf=1) ─────────────────────────────────────────────
-  // Диагностика клиента: FPS по rAF, p95 кадра, число загруженных тайлов и
-  // трафик PMTiles из PerformanceResourceTiming. В обычном режиме выключен
-  // и на прод-вид не влияет: DOM создаётся только при `?perf=1`.
-  useEffect(() => {
-    setPerfEnabled(
-      new URLSearchParams(window.location.search).get("perf") === "1",
-    );
-  }, []);
-
-  useEffect(() => {
-    if (!perfEnabled) return;
-    const el = perfRef.current;
-    if (!el) return;
-
-    // Окно кадров ~4 с: FPS = 1000/среднее, p95 — 95-й процентиль длительности.
-    const frameTimes: number[] = [];
-    let lastFrame = performance.now();
-    let rafId = 0;
-    const onFrame = (now: number) => {
-      const dt = now - lastFrame;
-      lastFrame = now;
-      if (dt > 0 && dt < 1000) {
-        frameTimes.push(dt);
-        if (frameTimes.length > 240) frameTimes.shift();
-      }
-      rafId = requestAnimationFrame(onFrame);
-    };
-    rafId = requestAnimationFrame(onFrame);
-
-    // Загруженные тайлы: уникальные z/x/y из sourcedata для PMTiles-источников
-    // (кэш и повторные события не удваивают счётчик).
-    const tiles = new Set<string>();
-    const onSourceData = (event: maplibregl.MapSourceDataEvent) => {
-      if (event.sourceId !== "basemap" && event.sourceId !== "buildings") return;
-      const canonical = (
-        event.tile as
-          | { tileID?: { canonical?: { z: number; x: number; y: number } } }
-          | undefined
-      )?.tileID?.canonical;
-      if (!canonical || !event.sourceId) return;
-      tiles.add(`${event.sourceId}/${canonical.z}/${canonical.x}/${canonical.y}`);
-    };
-    let attached: maplibregl.Map | null = null;
-    const attach = () => {
-      const map = (window as unknown as { __map?: maplibregl.Map }).__map;
-      if (!map || attached) return;
-      attached = map;
-      map.on("sourcedata", onSourceData);
-    };
-    attach();
-
-    const render = () => {
-      attach();
-      const map = (window as unknown as { __map?: maplibregl.Map }).__map;
-      const sorted = frameTimes.slice().sort((a, b) => a - b);
-      const avg =
-        frameTimes.reduce((sum, value) => sum + value, 0) /
-        Math.max(1, frameTimes.length);
-      const p95 = sorted.length
-        ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))]
-        : 0;
-      let bytes = 0;
-      for (const entry of performance.getEntriesByType(
-        "resource",
-      ) as PerformanceResourceTiming[]) {
-        if (entry.name.includes(".pmtiles")) bytes += entry.transferSize || 0;
-      }
-      el.textContent = [
-        `FPS ${frameTimes.length ? Math.round(1000 / avg) : "—"}`,
-        `p95 ${p95 ? p95.toFixed(1) : "—"} мс`,
-        `тайлы ${tiles.size}`,
-        `PMTiles ${(bytes / 1048576).toFixed(2)} МБ`,
-        `z ${(map?.getZoom() ?? 0).toFixed(2)}`,
-      ].join(" · ");
-    };
-    render();
-    const timer = window.setInterval(render, 500);
-    return () => {
-      window.cancelAnimationFrame(rafId);
-      window.clearInterval(timer);
-      attached?.off("sourcedata", onSourceData);
-    };
-  }, [perfEnabled]);
 
   // Движок карты (создание карты, слои, обработчики) — см. map/engine.ts.
   // Контекст собирается при монтировании, как и раньше: зависимости пустые.
@@ -397,14 +312,6 @@ export default function Map() {
           клики (чипы, таймлайн, карточка остаются нажимаемыми) и не перекрывает
           панели (z-9/z-10 против z-2). */}
       <div className="sky-twilight" data-sky-layer="1" aria-hidden />
-      {perfEnabled && (
-        <div
-          ref={perfRef}
-          data-perf-overlay="1"
-          className="pointer-events-none absolute left-2 top-2 z-30 max-w-[92vw] rounded-md bg-overlay px-2 py-1 font-mono text-10 leading-tight text-overlay-ink"
-          aria-hidden
-        />
-      )}
       <LayersPanel
         visibility={visible}
         onToggle={(key) =>
@@ -527,6 +434,8 @@ export default function Map() {
         информация по открытым данным, не является замером или оценкой стоимости
       </button>
       {aboutOpen && <AboutData onClose={closeAbout} />}
+      {/* Замер S14: монтируется только при `?perf=1`, иначе сразу null. */}
+      <PerfProbe />
     </div>
   );
 }
