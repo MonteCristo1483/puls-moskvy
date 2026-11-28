@@ -52,12 +52,8 @@ export function streamLengthPx(speedPx: number): number {
 }
 
 export type AtmospherePalette = {
-  /** Цвет обычного ветра. */
+  /** Цвет обычного ветра: и свечение, и ядро точки. */
   wind: string;
-  /** Мягкое свечение вокруг точки (та же лазурь, ниже альфа). */
-  glow: string;
-  /** Ядро: чуть светлее частицы, чтобы точка читалась на карте. */
-  core: string;
 };
 
 /**
@@ -67,13 +63,9 @@ export type AtmospherePalette = {
 export const ATMOSPHERE_PALETTE: Record<Theme, AtmospherePalette> = {
   light: {
     wind: WIND_COLOR,
-    glow: "rgba(127, 211, 255, 0.30)",
-    core: "#eaf8ff",
   },
   dark: {
     wind: "#699ed3",
-    glow: "rgba(105, 158, 211, 0.24)",
-    core: "#cfe8f7",
   },
 };
 

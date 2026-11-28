@@ -14,8 +14,8 @@ import {
   advanceStreams,
   createStreams,
   flowSpan,
-  seededRandom,
   streamParticleTotal,
+  streamRandom,
   type WindStream,
 } from "./streams";
 import {
@@ -28,8 +28,6 @@ import {
 
 /** Потолок devicePixelRatio: на 3x канвас в 9 раз дороже, а разницы не видно. */
 const MAX_DPR = 2;
-/** Seed картины: случайные фазы струй стабильны между кадрами и перезагрузками. */
-const SCENE_SEED = 20_261_128;
 /** Вкладка могла провиснуть — не телепортируем струи через полэкрана. */
 const MAX_FRAME_DT = 0.05;
 
@@ -121,7 +119,7 @@ export default function AtmosphereOverlay({ context }: { context: LayerContext }
           bearingDeg,
           speedPx,
           span,
-          rand: seededRandom(SCENE_SEED + count * 7919),
+          rand: streamRandom(count),
         }),
         width,
         height,

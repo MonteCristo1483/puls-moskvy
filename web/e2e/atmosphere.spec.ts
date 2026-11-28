@@ -1,9 +1,16 @@
 import { test, expect, type Page } from "@playwright/test";
 import {
+  createStreams,
+  flowSpan,
+  streamDots,
+  streamRandom,
+} from "../app/atmosphere/streams";
+import {
   ATMOSPHERE_PALETTE,
   WIND_COLOR,
   flightBearingDeg,
   streamCount,
+  streamLengthPx,
   streamSpeedPx,
 } from "../app/atmosphere/wind";
 
@@ -91,6 +98,75 @@ test("Атмосфера: палитра — лазурная днём, холо
     const { r, g, b } = hexToRgb(color);
     expect(b).toBeGreaterThan(g);
     expect(b).toBeGreaterThan(r);
+  }
+});
+
+test("Атмосфера: струи — узкие нитки во весь экран, центры не сливаются", () => {
+  // Та же картина, что рисует слой (ветер 3 м/с, 210° «откуда»), но посчитанная
+  // чистыми функциями: проверяем геометрию струи, а не константы.
+  const width = 390;
+  const height = 844;
+  const windMs = 3;
+  const bearing = flightBearingDeg(210); // 30° — полёт на северо-восток
+  const count = streamCount(windMs); // 3 струи
+  const speedPx = streamSpeedPx(windMs);
+  const span = flowSpan(width, height, bearing, streamLengthPx(speedPx));
+  const streams = createStreams({
+    count,
+    width,
+    height,
+    bearingDeg: bearing,
+    speedPx,
+    span,
+    rand: streamRandom(count),
+  });
+
+  const rad = (bearing * Math.PI) / 180;
+  const dirX = Math.sin(rad);
+  const dirY = -Math.cos(rad);
+  const perpX = Math.cos(rad);
+  const perpY = Math.sin(rad);
+  // Протяжённость экрана вдоль ветра — планка для длины струи.
+  const alongExtent = Math.abs(width * dirX) + Math.abs(height * dirY);
+
+  // Большой виртуальный холст: меряем геометрию струи, не обрезая её кадром.
+  const canvasSize = 5000;
+  const center = canvasSize / 2;
+  let total = 0;
+  const crossCenters: number[] = [];
+  for (const stream of streams) {
+    total += stream.particles.length;
+    const dots = streamDots(stream, bearing, canvasSize, canvasSize, span, 0);
+    expect(dots.length).toBeGreaterThan(0);
+    const across = dots.map(
+      (dot) => perpX * (dot.x - center) + perpY * (dot.y - center),
+    );
+    const along = dots.map(
+      (dot) => dirX * (dot.x - center) + dirY * (dot.y - center),
+    );
+    const acrossCenter =
+      across.reduce((sum, value) => sum + value, 0) / across.length;
+    crossCenters.push(acrossCenter);
+
+    // Узость: ни одна точка не отходит от оси струи больше чем на 20 px.
+    const acrossSpread = Math.max(
+      ...across.map((value) => Math.abs(value - acrossCenter)),
+    );
+    expect(acrossSpread).toBeLessThanOrEqual(20);
+
+    // Длина: вдоль ветра разброс не короче 55 % экрана.
+    const alongSpread = Math.max(...along) - Math.min(...along);
+    expect(alongSpread).toBeGreaterThanOrEqual(0.55 * alongExtent);
+  }
+
+  // Струй 2–4 и точек всего ≥ 300 при 3 м/с на 390×844.
+  expect(count).toBeGreaterThanOrEqual(2);
+  expect(count).toBeLessThanOrEqual(4);
+  expect(total).toBeGreaterThanOrEqual(300);
+
+  // Поперечные центры струй различимы: соседние не ближе 60 px.
+  for (let index = 1; index < crossCenters.length; index += 1) {
+    expect(Math.abs(crossCenters[index] - crossCenters[index - 1])).toBeGreaterThanOrEqual(60);
   }
 });
 
@@ -238,5 +314,56 @@ test.describe("Атмосфера: поток частиц на карте", () 
       "error",
     );
     await expect(page.locator('[data-atmosphere="1"]')).toHaveCount(0);
+  });
+
+  test("prefers-reduced-motion: статичный кадр без анимации", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await mockWeather(page);
+    await page.goto("./");
+
+    const canvas = page.locator('[data-atmosphere="1"]');
+    await expect(canvas).toBeVisible();
+    await expect(canvas).toHaveAttribute("data-atmosphere-motion", "static");
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() =>
+            Number(
+              document
+                .querySelector('[data-atmosphere="1"]')
+                ?.getAttribute("data-atmosphere-particles") ?? 0,
+            ),
+          ),
+        { timeout: 20_000 },
+      )
+      .toBeGreaterThan(0);
+
+    // Кадр действительно статичен: контрольная сумма пикселей канваса не
+    // меняется, то есть цикл rAF ничего не дорисовывает.
+    const checksum = () =>
+      page.evaluate(() => {
+        const element = document.querySelector<HTMLCanvasElement>(
+          '[data-atmosphere="1"]',
+        );
+        const context = element?.getContext("2d");
+        if (!element || !context) return -1;
+        const pixels = context.getImageData(
+          0,
+          0,
+          element.width,
+          element.height,
+        ).data;
+        let sum = 0;
+        for (let index = 0; index < pixels.length; index += 97) {
+          sum = (sum + pixels[index]) % 1_000_000_007;
+        }
+        return sum;
+      });
+    const first = await checksum();
+    expect(first).toBeGreaterThan(0);
+    await page.waitForTimeout(800);
+    expect(await checksum()).toBe(first);
   });
 });

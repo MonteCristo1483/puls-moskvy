@@ -9,6 +9,17 @@ import { streamLengthPx } from "./wind";
 export type RandomSource = () => number;
 
 /**
+ * Seed картины слоя. Экспортируется, чтобы проверки геометрии считали ту же
+ * картину, что видит человек: это не подгонка, а общая отправная точка.
+ */
+export const STREAM_SEED = 20_261_128;
+
+/** ГПСЧ слоя: один и тот же seed на то же число струй. */
+export function streamRandom(count: number): RandomSource {
+  return seededRandom(STREAM_SEED + count * 7919);
+}
+
+/**
  * Детерминированный ПСЧ (mulberry32): при одном seed картина та же — это нужно
  * статичному кадру и повторяемости проверок.
  */
@@ -36,8 +47,6 @@ export type StreamParticle = {
   driftAmp: number;
   /** Радиус точки, px. */
   radius: number;
-  /** Базовая яркость, 0…1. */
-  brightness: number;
 };
 
 export type WindStream = {
@@ -87,9 +96,10 @@ export function flowSpan(
   return Math.max(120, along + lengthPx + 80);
 }
 
-function makeParticle(rand: RandomSource): StreamParticle {
-  // u = √r — точек гуще у головы, как у кометы: хвост растворяется.
-  const u = Math.sqrt(rand());
+export function makeParticle(rand: RandomSource): StreamParticle {
+  // u равномерно вдоль следа: нить читается сплошной, а «кометность» задаёт
+  // альфа-градиент (хвост тусклее, голова ярче), а не сгусток у головы.
+  const u = rand();
   // Треугольное распределение в −1…1: облако не обрезано по краям.
   const cross = (rand() + rand() + rand()) / 1.5 - 1;
   return {
@@ -97,9 +107,12 @@ function makeParticle(rand: RandomSource): StreamParticle {
     cross,
     driftPhase: rand() * TAU,
     driftSpeed: 0.3 + rand() * 0.55,
-    driftAmp: 2 + rand() * 5,
-    radius: 1.3 + rand() * 1.8,
-    brightness: 0.7 + rand() * 0.3,
+    // Дрейф лёгкий: вместе с полушириной следа он держит поперечный разброс
+    // в пределах 20 px — струя остаётся ниткой, а не облаком.
+    driftAmp: 0.8 + rand() * 2.2,
+    // Точка крупнее прежней: при узком следе именно размер ядра и ореола
+    // делает нить читаемой на светлой карте.
+    radius: 1.6 + rand() * 1.4,
   };
 }
 
@@ -113,49 +126,47 @@ export function createStreams(options: StreamOptions): WindStream[] {
   const rand = options.rand ?? Math.random;
   const count = Math.max(2, Math.min(4, Math.round(options.count)));
   const rad = toRadians(bearingDeg);
-  // Полуширина экрана вдоль поперечной оси: дальше струя целиком уходит за
-  // кадр, поэтому смещения ограничены этим пределом, а не диагональю.
-  const perpX = Math.cos(rad);
-  const perpY = Math.sin(rad);
-  const halfPerp = Math.min(
-    Math.abs(perpX) > 1e-6
-      ? width / (2 * Math.abs(perpX))
-      : Number.POSITIVE_INFINITY,
-    Math.abs(perpY) > 1e-6
-      ? height / (2 * Math.abs(perpY))
-      : Number.POSITIVE_INFINITY,
-  );
-  const band = Number.isFinite(halfPerp)
-    ? halfPerp
-    : Math.min(width, height) / 2;
   // Протяжённость экрана вдоль ветра: струя длиннее половины этой дистанции,
   // иначе поток читается как облачко в центре, а не как поток.
   const alongExtent =
     Math.abs(width * Math.sin(rad)) + Math.abs(height * Math.cos(rad));
+  // Короткая ось экрана — поперёк потока: струи раскладываем по ней долями
+  // 1/4, 2/4, 3/4 (для трёх) или 1/8…7/8 (для четырёх) с шагом в четверть,
+  // чтобы все струи были видны одновременно и порознь.
+  const shortAxis = Math.min(width, height);
+  const laneSpread = (count - 1) * 0.25;
   const streams: WindStream[] = [];
 
   for (let index = 0; index < count; index += 1) {
-    // Дорожки равномерно по ширине потока плюс небольшой случайный сдвиг.
-    const lane = count === 1 ? 0 : index / (count - 1) - 0.5;
-    const jitter = (rand() - 0.5) * (count === 1 ? 0 : 0.24);
-    const offset = (lane + jitter) * band * 1.4;
+    const lane =
+      count === 1 ? 0.5 : 0.5 + (index / (count - 1) - 0.5) * laneSpread;
+    // Джиттер — ±0,08 шага между струями: картина живая, но соседние центры
+    // не сходятся ближе 60 px.
+    const jitter = (rand() - 0.5) * 2 * 0.08 * (shortAxis / count);
+    const offset = (lane - 0.5) * shortAxis + jitter;
     const length = Math.max(
       streamLengthPx(speedPx),
-      alongExtent * (0.5 + rand() * 0.22),
+      // Не короче 58 % экрана вдоль ветра (приёмка требует ≥ 55 %).
+      alongExtent * (0.58 + rand() * 0.2),
     );
-    // Узкая струя: вытянутое облако, а не широкая полоса, но с заметной
-    // поперечной шириной — иначе точки выстраиваются в одну линию.
-    const halfWidth = 22 + rand() * 26;
+    // Узкий след: точки выстраиваются в нитку, а не размазываются облаком.
+    const halfWidth = 8 + rand() * 8;
     // Плотность держим одинаковой: длиннее струя — больше точек в ней.
-    const particleCount = Math.round(length * 0.32 + 20);
+    const particleCount = Math.round(length * 0.55 + 30);
     const particles: StreamParticle[] = [];
     for (let pointIndex = 0; pointIndex < particleCount; pointIndex += 1) {
       particles.push(makeParticle(rand));
     }
+    // Фазу выбираем так, чтобы тело струи пересекало экран: голова гуляет по
+    // окну «от края экрана до края плюс длина следа». Случайный джиттер
+    // оставляет картину живой, но струи видны все сразу, а не по одной.
+    const visibleWindow = alongExtent + length;
+    const head =
+      -alongExtent / 2 +
+      ((index + 0.5) / count) * visibleWindow +
+      (rand() - 0.5) * (visibleWindow / count) * 0.25;
     streams.push({
-      // Фазы раскладываем по пути и размываем случайно: струи видны по всей
-      // карте, а не собираются случайно у одного края.
-      travel: ((index + rand() * 0.6) / count) * span,
+      travel: (head + span / 2) % span,
       offset,
       length,
       halfWidth,
@@ -194,9 +205,7 @@ export type StreamDot = {
   x: number;
   y: number;
   radius: number;
-  /** Яркость точки 0…1. */
-  alpha: number;
-  /** 0 — хвост, 1 — голова: у головы рисуем светлое ядро. */
+  /** 0 — хвост, 1 — голова: чем больше, тем ярче ядро. */
   heat: number;
 };
 
@@ -242,10 +251,6 @@ export function streamDots(
       x,
       y,
       radius: particle.radius,
-      alpha:
-        particle.brightness *
-        (0.32 + 0.68 * particle.u ** 1.2) *
-        (0.75 + 0.25 * taper),
       heat: particle.u,
     });
   }
