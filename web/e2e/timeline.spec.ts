@@ -91,27 +91,29 @@ const clockOf = (minutes: number) =>
   ).padStart(2, "0")}`;
 
 type MapHandle = {
-  getLayer: (id: string) => unknown;
   getCenter: () => { lng: number; lat: number };
-  queryRenderedFeatures: (options: {
-    layers: string[];
-  }) => { properties?: Record<string, unknown> }[];
 };
 
+/**
+ * Показания ветра для проверки «выбранный час доехал до карты»: поток частиц
+ * отдаёт силу и азимут полёта в data-атрибутах канваса, карта — центр (для
+ * сверки солнца). Проверка смысла прежняя, но стрелок-символов больше нет:
+ * канвас живёт независимо от готовности стиля карты.
+ */
 function mapHandle(page: Page) {
   return page.evaluate(() => {
+    const canvas = document.querySelector('[data-atmosphere="1"]');
     const map = (window as unknown as { __map?: unknown }).__map;
-    if (!map || typeof (map as MapHandle).getLayer !== "function") return null;
-    const handle = map as MapHandle;
-    if (!handle.getLayer("weather-wind-arrows")) return null;
-    const features = handle.queryRenderedFeatures({
-      layers: ["weather-wind-arrows"],
-    });
-    if (features.length === 0) return null;
-    const center = handle.getCenter();
+    if (!canvas || !map || typeof (map as MapHandle).getCenter !== "function") {
+      return null;
+    }
+    const rotate = Number(canvas.getAttribute("data-atmosphere-bearing"));
+    const speed = Number(canvas.getAttribute("data-atmosphere-wind"));
+    if (!Number.isFinite(rotate) || !Number.isFinite(speed)) return null;
+    const center = (map as MapHandle).getCenter();
     return {
-      rotate: Number(features[0].properties?.rotate),
-      speed: Number(features[0].properties?.speed),
+      rotate,
+      speed,
       center: [center.lng, center.lat] as [number, number],
     };
   });

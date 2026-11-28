@@ -194,21 +194,6 @@ export function mixHex(a: string, b: string, t: number): string {
 // ── Цвета слоёв поверх карты (WebGL/canvas, не DOM): держим рядом с
 // палитрами тем, чтобы новые слои не заводили hex в компонентах. ─────────
 
-/** Стрелки ветра: ступени скорости — тихо, слабый, заметный, сильный. */
-export const WIND_TIER_COLORS: Record<
-  Theme,
-  readonly [string, string, string, string]
-> = {
-  light: ["#64748b", "#0f766e", "#b45309", "#be123c"],
-  dark: ["#a3b3c7", "#5eead4", "#fcd34d", "#fb7185"],
-};
-
-/** Подложка стрелки ветра: контрастна и карте, и 3D-домам в обеих темах. */
-export const WIND_TIER_HALO: Record<Theme, string> = {
-  light: "rgba(255,255,255,0.92)",
-  dark: "rgba(6,12,20,0.8)",
-};
-
 /**
  * Тени кадра растворены в один MultiPolygon, поэтому альфа не складывается
  * на перекрытиях: 0.19 в светлой теме — ровная «тень на земле», подложка
